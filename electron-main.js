@@ -1,5 +1,5 @@
 /**
- * St. Anne Mission Hospital — ICT Command Centre
+ * DericBI Inventory Control
  * Electron Main Process
  */
 
@@ -23,17 +23,26 @@ const SRC_DIR    = resPath('src');      // main.py + ui.html
 const ASSETS_DIR = resPath('assets');  // seed files
 
 // Data directory:
-// - Installed (NSIS): AppData/Roaming/ICT Command Centre (writable, survives updates)
+// - Installed (NSIS): AppData/Roaming/DericBI Inventory Control (writable, survives updates)
 // - Dev (start.bat):  project/data-dev
 function getDataDir() {
   if (!IS_PACKED) return path.join(__dirname, 'data-dev');
-  try { return path.join(app.getPath('userData'), '..', 'ICT Command Centre'); }
+  try { return path.join(app.getPath('userData'), '..', 'DericBI Inventory Control'); }
   catch (_) {
-    try { return path.join(app.getPath('home'), 'AppData', 'Roaming', 'ICT Command Centre'); }
+    try { return path.join(app.getPath('home'), 'AppData', 'Roaming', 'DericBI Inventory Control'); }
     catch (_) { return path.join(path.dirname(app.getPath('exe')), 'data'); }
   }
 }
 const DATA_DIR = getDataDir();
+
+// One-time migration: pre-rebrand installs stored data in 'ICT Command Centre'.
+// Copy (never move) it so existing data survives the rename.
+try {
+  const LEGACY_DIR = path.join(DATA_DIR, '..', 'ICT Command Centre');
+  if (IS_PACKED && !fs.existsSync(DATA_DIR) && fs.existsSync(LEGACY_DIR)) {
+    fs.cpSync(LEGACY_DIR, DATA_DIR, { recursive: true });
+  }
+} catch (e) { console.warn('[migrate] legacy data copy skipped:', e.message); }
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
@@ -153,7 +162,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1440, height: 880, minWidth: 1024, minHeight: 680,
     backgroundColor: '#0d1117',
-    title: 'St. Anne Mission Hospital — ICT Command Centre',
+    title: 'DericBI Inventory Control',
     icon: resPath('assets', 'icon.ico'),
     show: false,
     webPreferences: {

@@ -1,7 +1,7 @@
-ST. ANNE MISSION HOSPITAL
-ICT Command Centre
+DericBI Inventory Control
+Cut Through Noise
 
-This software is proprietary to St. Anne Mission Hospital.
-It is licensed for internal use only within the hospital premises.
+© DericBI. All rights reserved.
 
-ICT Department — Serve With Love
+This software is provided for demonstration and evaluation purposes.
+Contact DericBI for licensing: https://dericbiskills.vercel.app

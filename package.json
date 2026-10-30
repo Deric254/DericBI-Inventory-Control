@@ -1,8 +1,8 @@
 {
-  "name": "ict-command-centre",
+  "name": "dericbi-inventory-control",
   "version": "2.0.1",
-  "description": "St. Anne Mission Hospital — ICT Command Centre",
-  "author": "St. Anne Mission Hospital ICT",
+  "description": "DericBI Inventory Control — Cut Through Noise",
+  "author": "DericBI",
   "repository": {
     "type": "git",
     "url": "https://github.com/Deric254/DericBI-Inventory-Control.git"
@@ -20,9 +20,9 @@
     "electron-builder": "^24.0.0"
   },
   "build": {
-    "appId": "ke.co.stannemission.ictcommandcentre",
-    "productName": "ICT Command Centre",
-    "copyright": "St. Anne Mission Hospital",
+    "appId": "com.dericbi.inventorycontrol",
+    "productName": "DericBI Inventory Control",
+    "copyright": "© DericBI",
     "directories": {
       "output": "dist"
     },
@@ -60,10 +60,10 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "ICT Command Centre",
+      "shortcutName": "DericBI Inventory Control",
       "installerIcon": "icon.ico",
       "uninstallerIcon": "icon.ico",
-      "artifactName": "ICT_CommandCentre_Setup.exe"
+      "artifactName": "DericBI_InventoryControl_Setup.exe"
     },
     "publish": {
       "provider": "github",

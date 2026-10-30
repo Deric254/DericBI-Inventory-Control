@@ -28,4 +28,3 @@ Thumbs.db
 
 # Never ship a PIN; users set their own on first launch
 assets/auth.json
-assets/auth.json

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>St. Anne ICT Command Centre v2</title>
+<title>DericBI Inventory Control v2</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap');
@@ -22,18 +22,18 @@
   --border:rgba(255,255,255,.055);
   --border2:rgba(255,255,255,.10);
 
-  /* ── St. Anne brand palette ── */
-  --brand:#7B1C2E;          /* deep maroon — primary */
-  --brand-dim:rgba(123,28,46,.18);
-  --brand-lt:#9e2438;       /* lighter maroon for hover */
-  --brand-glow:rgba(123,28,46,.45);
-  --gold:#C49A1A;           /* mission gold — accent */
-  --gold-lt:#F0C040;        /* highlight gold */
-  --gold-dim:rgba(196,154,26,.15);
+  /* ── DericBI brand palette ── */
+  --brand:#1E3A8A;          /* DericBI navy — primary */
+  --brand-dim:rgba(30,58,138,.18);
+  --brand-lt:#2F55C4;       /* lighter navy for hover */
+  --brand-glow:rgba(30,58,138,.45);
+  --gold:#FDC819;           /* DericBI gold — accent */
+  --gold-lt:#FFD84D;        /* highlight gold */
+  --gold-dim:rgba(253,200,25,.15);
 
   /* ── Semantic colours ── */
-  --blue:#C49A1A;           /* primary actions → gold */
-  --blue-dim:rgba(196,154,26,.14);
+  --blue:#FDC819;           /* primary actions → gold */
+  --blue-dim:rgba(253,200,25,.14);
   --green:#29d67a;
   --green-dim:rgba(41,214,122,.10);
   --amber:#e8960a;
@@ -45,7 +45,7 @@
   --teal:#00c9b8;
   --teal-dim:rgba(0,201,184,.10);
   --cyan:#00e5d4;
-  --accent-line:rgba(196,154,26,.7);
+  --accent-line:rgba(253,200,25,.7);
 
   font-family:'Inter',system-ui,sans-serif;
   font-size:13px;
@@ -56,7 +56,7 @@ body{background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;-
 /* ── SCROLLBAR ── */
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:rgba(123,28,46,.35);border-radius:4px}
+::-webkit-scrollbar-thumb{background:rgba(30,58,138,.35);border-radius:4px}
 ::-webkit-scrollbar-thumb:hover{background:var(--text3)}
 
 /* ── LAYOUT ── */
@@ -66,7 +66,7 @@ body{background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;-
 .sidebar{
   width:220px;min-width:220px;
   background:var(--bg2);
-  border-right:1px solid rgba(123,28,46,.3);
+  border-right:1px solid rgba(30,58,138,.3);
   display:flex;flex-direction:column;
   position:sticky;top:0;height:100vh;overflow-y:auto;
   z-index:50;
@@ -93,10 +93,10 @@ body{background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;-
 }
 .brand-mark{
   width:34px;height:34px;border-radius:9px;
-  background:linear-gradient(135deg,#7B1C2E 0%,#C49A1A 100%);
+  background:linear-gradient(135deg,#1E3A8A 0%,#FDC819 100%);
   display:flex;align-items:center;justify-content:center;
   font-size:17px;flex-shrink:0;color:#fff;
-  box-shadow:0 0 14px rgba(123,28,46,.45);
+  box-shadow:0 0 14px rgba(30,58,138,.45);
 }
 .brand-name{
   font-family:'Syne',sans-serif;
@@ -191,7 +191,7 @@ body{background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;-
 .btn:hover{background:var(--bg4);border-color:var(--border2)}
 .btn:active{transform:scale(.97)}
 .btn.pri{
-  background:linear-gradient(135deg,var(--brand) 0%,#9e2438 100%);
+  background:linear-gradient(135deg,var(--brand) 0%,#2F55C4 100%);
   color:#fff;
   border-color:var(--brand);
   font-weight:700;
@@ -234,7 +234,7 @@ body{background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;-
   top:0;left:0;right:0;height:2px;
   border-radius:12px 12px 0 0;
 }
-.kpi.blue::before{background:linear-gradient(90deg,var(--brand),#9e2438)}
+.kpi.blue::before{background:linear-gradient(90deg,var(--brand),#2F55C4)}
 .kpi.green::before{background:linear-gradient(90deg,#29d67a,#5ef0a2)}
 .kpi.amber::before{background:linear-gradient(90deg,#f0a500,#ffd060)}
 .kpi.red::before{background:linear-gradient(90deg,#ff4d5e,#ff8a93)}
@@ -619,15 +619,15 @@ html.light{
   --text3:#9a8880;
   --border:rgba(0,0,0,.09);
   --border2:rgba(0,0,0,.15);
-  --brand:#7B1C2E;
-  --brand-dim:rgba(123,28,46,.10);
-  --brand-lt:#9e2438;
-  --brand-glow:rgba(123,28,46,.30);
-  --gold:#C49A1A;
+  --brand:#1E3A8A;
+  --brand-dim:rgba(30,58,138,.10);
+  --brand-lt:#2F55C4;
+  --brand-glow:rgba(30,58,138,.30);
+  --gold:#FDC819;
   --gold-lt:#a07a10;
-  --gold-dim:rgba(196,154,26,.12);
-  --blue:#C49A1A;
-  --blue-dim:rgba(196,154,26,.12);
+  --gold-dim:rgba(253,200,25,.12);
+  --blue:#FDC819;
+  --blue-dim:rgba(253,200,25,.12);
   --green:#1a7a3f;
   --green-dim:rgba(26,122,63,.10);
   --amber:#b45309;
@@ -639,12 +639,12 @@ html.light{
   --teal:#0f766e;
   --teal-dim:rgba(15,118,110,.08);
   --cyan:#0e7490;
-  --accent-line:rgba(196,154,26,.5);
+  --accent-line:rgba(253,200,25,.5);
 }
 html.light body{background:var(--bg)}
-html.light ::-webkit-scrollbar-thumb{background:rgba(123,28,46,.2)}
-html.light .sidebar{background:var(--bg2);border-color:rgba(123,28,46,.15)}
-html.light .nav-btn.on{background:rgba(123,28,46,.08);color:var(--brand)}
+html.light ::-webkit-scrollbar-thumb{background:rgba(30,58,138,.2)}
+html.light .sidebar{background:var(--bg2);border-color:rgba(30,58,138,.15)}
+html.light .nav-btn.on{background:rgba(30,58,138,.08);color:var(--brand)}
 html.light .brand-sub{color:var(--text3)}
 html.light thead th{background:var(--bg3);color:var(--text3)}
 html.light tbody tr:hover{background:var(--bg3)}
@@ -668,7 +668,7 @@ html.light .loading-overlay{background:rgba(245,243,240,.95)}
 html.light .bar-track{background:var(--bg4)}
 html.light .rpt-section{background:var(--bg2)}
 html.light .rpt-sec-hd{background:var(--bg3);color:var(--text2)}
-html.light .b-new{background:rgba(196,154,26,.12);color:#7a5c00}
+html.light .b-new{background:rgba(253,200,25,.12);color:#7a5c00}
 html.light .b-good{background:rgba(26,122,63,.10);color:#1a7a3f}
 html.light .b-fair{background:rgba(15,118,110,.10);color:#0f766e}
 html.light .b-warn{background:rgba(180,83,9,.10);color:#b45309}
@@ -689,12 +689,12 @@ code, .mono{font-family:'DM Mono',monospace}
 <div id="login-overlay" style="position:fixed;inset:0;background:var(--bg);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;">
   <!-- subtle grid bg -->
   <div style="position:absolute;inset:0;background-image:linear-gradient(rgba(77,159,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(77,159,255,.03) 1px,transparent 1px);background-size:40px 40px;pointer-events:none"></div>
-  <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:600px;height:600px;background:radial-gradient(circle,rgba(123,28,46,.10) 0%,transparent 70%);pointer-events:none"></div>
+  <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:600px;height:600px;background:radial-gradient(circle,rgba(30,58,138,.10) 0%,transparent 70%);pointer-events:none"></div>
   <div style="position:relative;background:var(--bg2);border:1px solid var(--border2);border-radius:18px;padding:2.75rem 2.25rem;width:380px;max-width:92vw;box-shadow:0 32px 80px rgba(0,0,0,.6);">
     <div style="text-align:center;margin-bottom:2rem">
-      <div style="width:60px;height:60px;border-radius:16px;background:linear-gradient(135deg,#7B1C2E,#C49A1A);display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 1rem;box-shadow:0 0 24px rgba(77,159,255,.4)">🏥</div>
-      <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:700;margin-bottom:.4rem;color:var(--text)">St. Anne ICT</div>
-      <div style="font-size:12px;color:var(--text3);letter-spacing:.03em">Command Centre v2 &nbsp;·&nbsp; Restricted Access</div>
+      <img id="login-logo-img" src="" alt="DericBI" style="width:84px;height:84px;object-fit:contain;display:block;margin:0 auto 1rem">
+      <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:700;margin-bottom:.4rem;color:var(--text)">DericBI</div>
+      <div style="font-size:12px;color:var(--text3);letter-spacing:.03em">Inventory Control &nbsp;·&nbsp; <span style="color:var(--gold)">Cut Through Noise</span></div>
     </div>
     <div id="login-form">
       <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.5rem">Access PIN</div>
@@ -764,11 +764,11 @@ code, .mono{font-family:'DM Mono',monospace}
   <div class="brand">
     <div class="brand-mark" id="sidebar-logo-mark">
       <img id="sidebar-logo-img" src="" alt="" style="width:30px;height:30px;object-fit:contain;display:none;border-radius:6px">
-      <span id="sidebar-logo-fallback" style="font-size:18px">✝</span>
+      <span id="sidebar-logo-fallback" style="font-size:18px">◆</span>
     </div>
     <div>
-      <div class="brand-name">St. Anne ICT</div>
-      <div class="brand-sub">Command Centre</div>
+      <div class="brand-name">DericBI</div>
+      <div class="brand-sub">Inventory Control</div>
     </div>
   </div>
   <nav class="nav">
@@ -791,7 +791,7 @@ code, .mono{font-family:'DM Mono',monospace}
     <button class="btn ghost sm" onclick="openExcel()" style="width:100%;justify-content:center;font-size:11.5px;margin-bottom:.375rem">📁 Open Excel File</button>
     <div style="border-top:1px solid var(--border);padding-top:.625rem;margin-top:.25rem">
       <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem">
-        <div style="width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,#7B1C2E,#C49A1A);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">🔑</div>
+        <div style="width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,#1E3A8A,#FDC819);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">🔑</div>
         <div>
           <div style="font-size:11px;color:var(--text);font-weight:600">ICT Manager</div>
           <div style="font-size:10px;color:var(--text3)">Authenticated</div>
@@ -1088,7 +1088,7 @@ code, .mono{font-family:'DM Mono',monospace}
       <div class="card-hd"><span class="card-title">🚪 Session</span></div>
       <div class="card-bd">
         <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem">
-          <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#7B1C2E,#C49A1A);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;box-shadow:0 0 16px rgba(77,159,255,.3)">🔑</div>
+          <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#1E3A8A,#FDC819);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;box-shadow:0 0 16px rgba(77,159,255,.3)">🔑</div>
           <div>
             <div style="font-size:13.5px;font-weight:700;color:var(--text)">ICT Manager</div>
             <div style="font-size:11px;color:var(--text3);margin-top:.2rem">Active session &nbsp;·&nbsp; <span class="pulse" style="width:5px;height:5px;display:inline-block"></span> Authenticated</div>
@@ -1710,6 +1710,7 @@ function loadApp(){
         var img=document.getElementById('sidebar-logo-img');
         var fallback=document.getElementById('sidebar-logo-fallback');
         if(img){img.src=p;img.style.display='';if(fallback)fallback.style.display='none';}
+        var li=document.getElementById('login-logo-img');if(li)li.src=p;
       }
     }).catch(function(){});
   }catch(e){}
@@ -2727,7 +2728,7 @@ function generateHtmlReport(){
     if(!reportEl||!reportEl.innerHTML) return;
     var now=new Date();
     var ds=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
-    var style='<style>body{font-family:sans-serif;font-size:12px;color:#111;background:#fff;padding:2rem}table{border-collapse:collapse;width:100%;margin-bottom:1rem}th,td{border:1px solid #ddd;padding:4px 8px;text-align:left}th{background:#7B1C2E;color:#fff}tr:nth-child(even){background:#f9f9f9}.rpt-section{margin-bottom:1.5rem}.rpt-sec-hd{font-size:14px;font-weight:700;border-bottom:2px solid #7B1C2E;padding-bottom:4px;margin-bottom:.75rem}.rpt-kpi-row{display:flex;gap:1rem;flex-wrap:wrap}.rpt-kpi{text-align:center;padding:.75rem 1.25rem;background:#f5f5f5;border-radius:8px;min-width:100px}.rpt-kpi-v{font-size:24px;font-weight:700}.rpt-kpi-l{font-size:11px;color:#666}.badge{display:inline-block;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600}</style>';
+    var style='<style>body{font-family:sans-serif;font-size:12px;color:#111;background:#fff;padding:2rem}table{border-collapse:collapse;width:100%;margin-bottom:1rem}th,td{border:1px solid #ddd;padding:4px 8px;text-align:left}th{background:#1E3A8A;color:#fff}tr:nth-child(even){background:#f9f9f9}.rpt-section{margin-bottom:1.5rem}.rpt-sec-hd{font-size:14px;font-weight:700;border-bottom:2px solid #1E3A8A;padding-bottom:4px;margin-bottom:.75rem}.rpt-kpi-row{display:flex;gap:1rem;flex-wrap:wrap}.rpt-kpi{text-align:center;padding:.75rem 1.25rem;background:#f5f5f5;border-radius:8px;min-width:100px}.rpt-kpi-v{font-size:24px;font-weight:700}.rpt-kpi-l{font-size:11px;color:#666}.badge{display:inline-block;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600}</style>';
     var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>ICT Asset Report '+ds+'</title>'+style+'</head><body>'+reportEl.innerHTML+'</body></html>';
     var blob=new Blob([html],{type:'text/html;charset=utf-8;'});
     var url=URL.createObjectURL(blob);
@@ -2878,7 +2879,7 @@ function generateReport(){
         '<div style="font-family:\'Syne\',sans-serif;font-size:18px;font-weight:800;color:var(--text)">'+escHtml(title)+'</div>'+
         '<div style="font-size:11px;color:var(--text3);margin-top:.2rem">Generated '+escHtml(dateStr)+' at '+escHtml(timeStr)+'</div>'+
       '</div>'+
-      '<div style="font-size:11px;color:var(--text3);text-align:right">St. Anne Mission Hospital<br>ICT Command Centre v2</div>'+
+      '<div style="font-size:11px;color:var(--text3);text-align:right">DericBI Inventory Control<br>Cut Through Noise</div>'+
     '</div>'+
 
     // ── KPI Summary — all buckets shown so they add up to Active ──
@@ -3003,7 +3004,7 @@ function generateReport(){
     :'')+
 
     '<div style="text-align:center;font-size:10.5px;color:var(--text3);padding:1rem 0;border-top:1px solid var(--border);margin-top:.5rem">'+
-      'End of Report &nbsp;·&nbsp; St. Anne Mission Hospital ICT &nbsp;·&nbsp; Generated '+escHtml(dateStr)+
+      'End of Report &nbsp;·&nbsp; DericBI Inventory Control &nbsp;·&nbsp; Generated '+escHtml(dateStr)+
     '</div>';
 
   document.getElementById('report-output').innerHTML=html;

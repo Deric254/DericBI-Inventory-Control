@@ -1,8 +1,8 @@
 @echo off
-title St. Anne ICT Command Centre
+title DericBI Inventory Control
 cd /d "%~dp0"
 echo ================================================
-echo  St. Anne Mission Hospital -- ICT Command Centre
+echo  DericBI Inventory Control
 echo ================================================
 echo.
 

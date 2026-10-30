@@ -1,10 +1,10 @@
 @echo off
-title St. Anne ICT Command Centre — Installer Builder
+title DericBI Inventory Control — Installer Builder
 color 0A
 cd /d "%~dp0"
 
 echo ============================================================
-echo   St. Anne Mission Hospital — ICT Command Centre
+echo   DericBI Inventory Control
 echo   Building Installer EXE
 echo ============================================================
 echo.
@@ -52,7 +52,7 @@ echo.
 echo ============================================================
 echo   DONE!
 echo.
-echo   dist\ICT_CommandCentre_Setup.exe
+echo   dist\DericBI_InventoryControl_Setup.exe
 echo.
 echo   This is a proper installer - send it to any Windows PC.
 echo   It will install to Program Files with a Start Menu shortcut.

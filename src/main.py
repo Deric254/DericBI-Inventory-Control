@@ -1,5 +1,5 @@
 """
-St. Anne Mission Hospital — ICT Command Centre v2.0
+DericBI Inventory Control v2.0
 Local browser app + HTML UI + Excel as live database
 Enhancements: Custom departments/types, item transfers, repairs, replacements,
               classified role access, auto-audit logging, portable app builder
@@ -744,8 +744,8 @@ class Api:
                 manifest = {
                     "version": 1,
                     "exported": ts,
-                    "app": "ICT Command Centre",
-                    "hospital": "St. Anne Mission Hospital"
+                    "app": "DericBI Inventory Control",
+                    "tagline": "Cut Through Noise"
                 }
                 zf.writestr("ICT_MANIFEST.json", json.dumps(manifest, indent=2))
             b64 = base64.b64encode(buf.getvalue()).decode('ascii')
@@ -768,8 +768,8 @@ class Api:
                 if "ICT_MANIFEST.json" not in names:
                     return json.dumps({"ok": False, "error": "Invalid backup — missing manifest. Only backups exported from this system are accepted."})
                 manifest = json.loads(zf.read("ICT_MANIFEST.json"))
-                if manifest.get("app") != "ICT Command Centre":
-                    return json.dumps({"ok": False, "error": "This backup is not from ICT Command Centre."})
+                if manifest.get("app") not in ("DericBI Inventory Control", "ICT Command Centre"):
+                    return json.dumps({"ok": False, "error": "This backup is not from DericBI Inventory Control."})
                 # Must contain the master data file
                 if "ICT_MASTER.xlsx" not in names:
                     return json.dumps({"ok": False, "error": "Backup is missing ICT_MASTER.xlsx — cannot restore."})
@@ -882,12 +882,12 @@ class Api:
 
             bat_content = (
                 "@echo off\r\n"
-                "title St. Anne Mission Hospital - ICT Command Centre Setup\r\n"
+                "title DericBI Inventory Control Setup\r\n"
                 "color 0A\r\n"
                 "echo.\r\n"
                 "echo  =====================================================\r\n"
-                "echo   St. Anne Mission Hospital - ICT Command Centre\r\n"
-                "echo   Portable Installer  ^|  Serve With Love\r\n"
+                "echo   DericBI Inventory Control\r\n"
+                "echo   Portable Installer  ^|  Cut Through Noise\r\n"
                 "echo  =====================================================\r\n"
                 "echo.\r\n"
                 "\r\n"
@@ -924,7 +924,7 @@ class Api:
                 "echo  [+] Packages installed successfully.\r\n"
                 "\r\n"
                 ":: ── Step 4: Launch app ──\r\n"
-                "echo  [>] Launching ICT Command Centre...\r\n"
+                "echo  [>] Launching DericBI Inventory Control...\r\n"
                 "echo.\r\n"
                 "%PYTHON_CMD% main.py\r\n"
                 "pause\r\n"
@@ -932,7 +932,7 @@ class Api:
 
             start_bat_content = (
                 "@echo off\r\n"
-                "title St. Anne Mission Hospital - ICT Command Centre\r\n"
+                "title DericBI Inventory Control\r\n"
                 "cd /d \"%~dp0\"\r\n"
                 "for %%C in (python py python3) do (\r\n"
                 "  %%C --version >nul 2>&1 && set PYTHON_CMD=%%C && goto :run\r\n"
@@ -950,8 +950,8 @@ class Api:
                 "set -e\n"
                 "echo\n"
                 "echo ' ====================================================='\n"
-                "echo '  St. Anne Mission Hospital — ICT Command Centre'\n"
-                "echo '  Portable Installer  |  Serve With Love'\n"
+                "echo '  DericBI Inventory Control'\n"
+                "echo '  Portable Installer  |  Cut Through Noise'\n"
                 "echo ' ====================================================='\n"
                 "echo\n"
                 "# Find Python\n"
@@ -972,7 +972,7 @@ class Api:
             )
 
             readme_content = (
-                "ST. ANNE MISSION HOSPITAL — ICT COMMAND CENTRE\n"
+                "DERICBI INVENTORY CONTROL\n"
                 "HOW TO INSTALL ON A NEW DEVICE\n"
                 "===============================================\n\n"
                 "WINDOWS:\n"
@@ -995,7 +995,7 @@ class Api:
                 "  ICT_MASTER.xlsx  — your live database (all your data)\n"
                 "  auth.json        — your access PIN (hashed)\n"
                 "  config.json      — your custom departments/types (if exists)\n"
-                "  logo.png         — your hospital logo (if you have one)\n"
+                "  logo.png         — your logo (if you have one)\n"
                 "  start.bat        — quick-start launcher for Windows\n\n"
                 "LOGO:\n"
                 "  Place a file named logo.png in this folder.\n"
@@ -1004,8 +1004,8 @@ class Api:
                 "  • auth.json holds your PIN hash — do not share if access-restricted\n"
                 "  • To reset PIN: delete auth.json and restart the app\n\n"
                 "SUPPORT:\n"
-                "  ICT Department — St. Anne Mission Hospital\n"
-                "  Serve With Love\n"
+                "  DericBI — Cut Through Noise\n"
+                "  https://dericbiskills.vercel.app\n"
             )
 
             with open(setup_bat, 'w', newline='', encoding='utf-8') as f: f.write(bat_content)
@@ -1168,14 +1168,14 @@ def run_browser(api, ui_path, electron_mode=False):
     if electron_mode:
         print(f"ELECTRON_PORT={port}", flush=True)
     else:
-        print("St. Anne ICT Command Centre is running locally.")
+        print("DericBI Inventory Control is running locally.")
         print("Open this address if the browser does not appear:")
         print(url)
         webbrowser.open(url)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\nClosing ICT Command Centre.")
+        print("\nClosing DericBI Inventory Control.")
     finally:
         server.server_close()
 
@@ -1190,7 +1190,7 @@ def run_desktop(api, ui_path):
     # Desktop mode: pywebview loads ui.html directly via file:// and exposes
     # js_api as window.pywebview.api natively. No HTTP server or bridge injection needed.
     window = webview.create_window(
-        title            = "St. Anne Mission Hospital — ICT Command Centre v2",
+        title            = "DericBI Inventory Control v2",
         url              = ui_path,
         js_api           = api,
         width            = 1440,
@@ -1230,8 +1230,8 @@ def generate_pdf_report(engine: "ExcelEngine", output_path: str,
         import datetime, os, collections, re
 
         # ── PALETTE ────────────────────────────────────────
-        C_BRAND  = HexColor('#7B1C2E')
-        C_GOLD   = HexColor('#C49A1A')
+        C_BRAND  = HexColor('#0A1532')
+        C_GOLD   = HexColor('#FDC819')
         C_GREEN  = HexColor('#1a7a3f')
         C_AMBER  = HexColor('#b45309')
         C_GREY   = HexColor('#475569')
@@ -1353,15 +1353,15 @@ def generate_pdf_report(engine: "ExcelEngine", output_path: str,
 
                     cv.setFillColor(C_WHITE)
                     cv.setFont('Helvetica-Bold', 8)
-                    cv.drawString(lx, H - 0.75*cm, 'St. Anne Mission Hospital — ICT Department')
+                    cv.drawString(lx, H - 0.75*cm, 'DericBI Inventory Control')
                     cv.setFont('Helvetica', 7)
-                    cv.setFillColor(HexColor('#c4b4b8'))
-                    cv.drawString(lx, H - 1.15*cm, f'ICT Asset Report  ·  {scope}  ·  Serve With Love')
+                    cv.setFillColor(HexColor('#b8c4e0'))
+                    cv.drawString(lx, H - 1.15*cm, f'ICT Asset Report  ·  {scope}  ·  Cut Through Noise')
                     cv.setFillColor(C_WHITE)
                     cv.setFont('Helvetica-Bold', 7)
                     cv.drawRightString(W - MR, H - 0.75*cm, date_str)
                     cv.setFont('Helvetica', 6.5)
-                    cv.setFillColor(HexColor('#c4b4b8'))
+                    cv.setFillColor(HexColor('#b8c4e0'))
                     cv.drawRightString(W - MR, H - 1.15*cm, f'Page {doc.page}  ·  CONFIDENTIAL')
 
                     # ── Footer ──
@@ -1371,7 +1371,7 @@ def generate_pdf_report(engine: "ExcelEngine", output_path: str,
                     cv.setFillColor(C_GREY)
                     cv.setFont('Helvetica', 6.5)
                     cv.drawString(ML, MB - 0.55*cm,
-                        f'St. Anne Mission Hospital  ·  ICT Asset Report  ·  Generated {now_str}')
+                        f'DericBI Inventory Control  ·  Asset Report  ·  Generated {now_str}')
                     cv.drawRightString(W - MR, MB - 0.55*cm, 'CONFIDENTIAL — ICT USE ONLY')
                     cv.restoreState()
 
@@ -1379,7 +1379,7 @@ def generate_pdf_report(engine: "ExcelEngine", output_path: str,
                          leftMargin=ML, rightMargin=MR,
                          topMargin=MT, bottomMargin=MB,
                          title='ICT Asset Report',
-                         author='St. Anne Mission Hospital ICT')
+                         author='DericBI Inventory Control')
 
         # ── HELPERS ────────────────────────────────────────
         def sp(h=4): return Spacer(1, h)
@@ -1425,7 +1425,7 @@ def generate_pdf_report(engine: "ExcelEngine", output_path: str,
         # ── KPI STRIP ──────────────────────────────────────
         def kpi_strip():
             items = [
-                ('Total Active Assets', str(total),            '#7B1C2E'),
+                ('Total Active Assets', str(total),            '#0A1532'),
                 ('Good / New',          f'{n_ok}  ({pct_ok}%)','#1a7a3f'),
                 ('Need Attention',      str(n_repair),          '#b45309'),
                 ('Replaced / Retired',  str(len(replaced_rows)+len(disposed_rows)), '#C49A1A'),
@@ -1515,7 +1515,7 @@ def generate_pdf_report(engine: "ExcelEngine", output_path: str,
             cw_rep = [BW*0.18, BW*0.22, BW*0.18, BW*0.26, BW*0.16]
             story.append(dtable(
                 ['Type','Brand / Model','No.','Department','Status'],
-                r_rows, cw_rep, hbg=HexColor('#7B1C2E')))
+                r_rows, cw_rep, hbg=HexColor('#0A1532')))
 
         # ── Recent Activity ─────────────────────────────
         if recent:
@@ -1547,8 +1547,8 @@ def generate_pdf_report(engine: "ExcelEngine", output_path: str,
         story.append(HRFlowable(width='100%', thickness=0.5, color=C_GREY_MD,
                                 spaceAfter=4, spaceBefore=4))
         story.append(Paragraph(
-            f'<font color="#7B1C2E"><b>St. Anne Mission Hospital  ·  ICT Department</b></font>'
-            f'  &nbsp;·&nbsp;  <i>Serve With Love</i>'
+            f'<font color="#0A1532"><b>DericBI Inventory Control</b></font>'
+            f'  &nbsp;·&nbsp;  <i>Cut Through Noise</i>'
             f'  &nbsp;·&nbsp;  <font color="#94a3b8">Generated {now_str}  ·  CONFIDENTIAL</font>',
             ParagraphStyle('sf', fontSize=7, fontName='Helvetica',
                            alignment=TA_CENTER, textColor=C_GREY)))

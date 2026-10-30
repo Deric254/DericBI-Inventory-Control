@@ -106,9 +106,9 @@ jobs:
         shell: bash
         run: |
           V="${{ steps.bump.outputs.version }}"
-          test -f dist/ICT_CommandCentre_Setup.exe || { echo "installer missing"; exit 1; }
+          test -f dist/DericBI_InventoryControl_Setup.exe || { echo "installer missing"; exit 1; }
           test -f dist/latest.yml || { echo "latest.yml missing"; exit 1; }
-          SIZE=$(stat -c%s dist/ICT_CommandCentre_Setup.exe)
+          SIZE=$(stat -c%s dist/DericBI_InventoryControl_Setup.exe)
           echo "installer bytes: $SIZE"
           test "$SIZE" -gt 50000000 || { echo "installer suspiciously small (Python/Electron missing?)"; exit 1; }
           grep -q "version: $V" dist/latest.yml || { echo "latest.yml version != $V"; cat dist/latest.yml; exit 1; }
