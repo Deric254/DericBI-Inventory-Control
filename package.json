@@ -1,15 +1,8 @@
 {
-<<<<<<< HEAD
   "name": "dericbi-inventory-control",
   "version": "2.0.1",
   "description": "DericBI Inventory Control — Cut Through Noise",
   "author": "DericBI",
-=======
-  "name": "ict-command-centre",
-  "version": "2.0.2",
-  "description": "St. Anne Mission Hospital — ICT Command Centre",
-  "author": "St. Anne Mission Hospital ICT",
->>>>>>> c64bdf45aa82dec9750e9f2c5eafd69cb8c68ebe
   "repository": {
     "type": "git",
     "url": "https://github.com/Deric254/DericBI-Inventory-Control.git"
