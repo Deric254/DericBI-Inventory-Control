@@ -40,6 +40,32 @@ jobs:
           node-version: 20
           cache: npm
 
+      # Fresh installs are seeded from assets/. Refuse to build if real data or a PIN got in.
+      - name: Guard - no private data in the installer
+        shell: bash
+        run: |
+          python -m pip install --quiet openpyxl
+          python - <<'PY'
+          import os, sys, openpyxl
+          errors = []
+          if os.path.exists("assets/auth.json"):
+              errors.append("assets/auth.json exists - a PIN must never be shipped; users set their own on first launch.")
+          wb = openpyxl.load_workbook("assets/ICT_MASTER.xlsx", read_only=True)
+          for ws in wb.worksheets:
+              rows = [r for r in ws.iter_rows(min_row=2, values_only=True) if any(v not in (None, "") for v in r)]
+              if ws.title == "Inventory":
+                  bad = [r for r in rows if not str(r[4] or "").startswith("SAMPLE-")]
+                  if bad:
+                      errors.append(f"Inventory has {len(bad)} row(s) whose Serial No. does not start with SAMPLE-")
+              elif rows:
+                  errors.append(f"Sheet '{ws.title}' has {len(rows)} data row(s); the seed workbook must have only headers there")
+          if errors:
+              print("BUILD BLOCKED - private data detected:")
+              for e in errors: print(" -", e)
+              sys.exit(1)
+          print("OK: seed data is sample-only and no PIN is bundled")
+          PY
+
       # Reserve the next version in the repo BEFORE building, so version numbers
       # are unique and always increase (a failed build just skips a number).
       - name: Bump version and commit
