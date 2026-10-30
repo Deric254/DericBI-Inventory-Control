@@ -3,10 +3,17 @@
   "version": "2.0.0",
   "description": "St. Anne Mission Hospital \u2014 ICT Command Centre",
   "author": "St. Anne Mission Hospital ICT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Deric254/inventory-control.git"
+  },
   "main": "electron-main.js",
   "scripts": {
     "start": "electron .",
     "build:win": "electron-builder --win nsis"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
   },
   "devDependencies": {
     "electron": "^31.0.0",
@@ -57,6 +64,12 @@
       "installerIcon": "icon.ico",
       "uninstallerIcon": "icon.ico",
       "artifactName": "ICT_CommandCentre_Setup.exe"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "Deric254",
+      "repo": "inventory-control",
+      "releaseType": "draft"
     }
   }
 }

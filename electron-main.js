@@ -3,7 +3,7 @@
  * Electron Main Process
  */
 
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const { spawn, execFileSync }                 = require('child_process');
 const path = require('path');
 const http = require('http');
@@ -182,9 +182,102 @@ function createWindow() {
   });
 }
 
+// ── Auto-update (GitHub Releases) ─────────────────────────────────────────────
+// Installed builds only. Never touches DATA_DIR except to copy a snapshot of it.
+// Every failure path is non-fatal: the app must always start and run normally.
+const UPDATE_CHECK_DELAY_MS    = 15 * 1000;
+const UPDATE_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
+
+function showBox(opts) {
+  return (mainWindow && !mainWindow.isDestroyed())
+    ? dialog.showMessageBox(mainWindow, opts)
+    : dialog.showMessageBox(opts);
+}
+
+// Copy live data to <data>/backups/pre-update/<ts>/ (kept: newest 3).
+// Sub-folder is invisible to the in-app backup list and its 5-file rotation.
+function snapshotBeforeUpdate() {
+  try {
+    const root = path.join(DATA_DIR, 'backups', 'pre-update');
+    const ts   = new Date().toISOString().replace(/[:.]/g, '-');
+    const dir  = path.join(root, ts);
+    fs.mkdirSync(dir, { recursive: true });
+    ['ICT_MASTER.xlsx', 'auth.json', 'config.json'].forEach(name => {
+      const src = path.join(DATA_DIR, name);
+      if (fs.existsSync(src)) fs.copyFileSync(src, path.join(dir, name));
+    });
+    fs.readdirSync(root).sort().slice(0, -3).forEach(old =>
+      fs.rmSync(path.join(root, old), { recursive: true, force: true }));
+  } catch (e) { console.warn('[update] snapshot skipped:', e.message); }
+}
+
+function setupAutoUpdate() {
+  if (!IS_PACKED) return;                       // never in dev / start.bat
+
+  let autoUpdater;
+  try { ({ autoUpdater } = require('electron-updater')); }
+  catch (e) { console.warn('[update] updater unavailable:', e.message); return; }
+
+  autoUpdater.autoDownload         = false;     // user decides
+  autoUpdater.autoInstallOnAppQuit = true;      // "Later" still installs on next close
+  autoUpdater.allowPrerelease      = false;
+
+  let prompted = false;                         // one prompt per session
+  let userDownloading = false;
+
+  autoUpdater.on('update-available', async info => {
+    if (prompted) return;
+    prompted = true;
+    const { response } = await showBox({
+      type: 'info', title: 'Update available', noLink: true,
+      message: `Version ${info.version} is available`,
+      detail: `You are on version ${app.getVersion()}.\n\nYour inventory data and PIN are not affected by updates.`,
+      buttons: ['Download', 'Later'], defaultId: 0, cancelId: 1,
+    });
+    if (response !== 0) return;
+    userDownloading = true;
+    autoUpdater.downloadUpdate().catch(e => console.warn('[update] download:', e.message));
+  });
+
+  autoUpdater.on('download-progress', p => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setProgressBar(p.percent / 100);
+  });
+
+  autoUpdater.on('update-downloaded', async info => {
+    userDownloading = false;
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setProgressBar(-1);
+    snapshotBeforeUpdate();
+    const { response } = await showBox({
+      type: 'info', title: 'Update ready', noLink: true,
+      message: `Version ${info.version} is ready to install`,
+      detail: 'The app will close, update, and reopen automatically.\nChoose Later to install when you next close the app.',
+      buttons: ['Restart and install', 'Later'], defaultId: 0, cancelId: 1,
+    });
+    if (response !== 0) return;
+    snapshotBeforeUpdate();                     // capture anything changed since download
+    killPython();                               // release file locks before installer runs
+    setImmediate(() => autoUpdater.quitAndInstall(true, true));
+  });
+
+  autoUpdater.on('error', e => {
+    console.warn('[update] error:', e && e.message);
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setProgressBar(-1);
+    if (userDownloading) {                      // only speak up if the user asked for it
+      userDownloading = false;
+      dialog.showErrorBox('Update failed',
+        'The update could not be downloaded. Your data is safe and the current version keeps working.\nPlease try again later.');
+    }
+  });
+
+  const check = () => autoUpdater.checkForUpdates().catch(e => console.warn('[update] check:', e.message));
+  setTimeout(check, UPDATE_CHECK_DELAY_MS);
+  setInterval(check, UPDATE_CHECK_INTERVAL_MS);
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 app.whenReady().then(() => {
   createWindow();
+  setupAutoUpdate();
   startPython(port => {
     const tryLoad = () => {
       http.get(`http://127.0.0.1:${port}/`, res => {

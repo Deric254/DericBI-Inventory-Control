@@ -1,0 +1,99 @@
+name: Build & Release
+
+# Every push to main: bump patch version -> build Windows installer -> publish GitHub Release.
+# Installed apps then find the release via latest.yml and offer the update.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+      - '.gitattributes'
+  workflow_dispatch:
+
+# One release at a time. A newer push waits; it never cancels a build in progress.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    # The version-bump commit carries [skip ci]; this is a second guard against loops.
+    if: github.actor != 'github-actions[bot]'
+
+    steps:
+      - name: Checkout latest main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # Reserve the next version in the repo BEFORE building, so version numbers
+      # are unique and always increase (a failed build just skips a number).
+      - name: Bump version and commit
+        id: bump
+        shell: bash
+        run: |
+          npm version patch --no-git-tag-version
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          git commit -m "chore(release): v$VERSION [skip ci]"
+          git push origin HEAD:main || { git pull --rebase origin main && git push origin HEAD:main; }
+          echo "Reserved version $VERSION"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Bundle embedded Python
+        shell: cmd
+        run: |
+          call scripts\bundle-python.bat
+          if errorlevel 1 exit /b 1
+
+      - name: Verify bundled Python can run the backend's packages
+        shell: bash
+        run: |
+          ./python/python.exe -c "import openpyxl, reportlab; print('python deps OK', openpyxl.__version__, reportlab.Version)"
+
+      - name: Build installer and upload to a draft release
+        shell: bash
+        run: npx electron-builder --win nsis --x64 --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify build output
+        shell: bash
+        run: |
+          V="${{ steps.bump.outputs.version }}"
+          test -f dist/ICT_CommandCentre_Setup.exe || { echo "installer missing"; exit 1; }
+          test -f dist/latest.yml || { echo "latest.yml missing"; exit 1; }
+          SIZE=$(stat -c%s dist/ICT_CommandCentre_Setup.exe)
+          echo "installer bytes: $SIZE"
+          test "$SIZE" -gt 50000000 || { echo "installer suspiciously small (Python/Electron missing?)"; exit 1; }
+          grep -q "version: $V" dist/latest.yml || { echo "latest.yml version != $V"; cat dist/latest.yml; exit 1; }
+          echo "OK: installer + latest.yml for v$V"
+
+      # The release stays a draft (invisible to the updater) until every file is uploaded.
+      - name: Publish release
+        shell: bash
+        run: |
+          V="${{ steps.bump.outputs.version }}"
+          gh release edit "v$V" --draft=false --latest --repo "${{ github.repository }}"
+          gh release view "v$V" --repo "${{ github.repository }}" --json assets --jq '.assets[].name'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
