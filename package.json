@@ -5,7 +5,7 @@
   "author": "St. Anne Mission Hospital ICT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Deric254/inventory-control.git"
+    "url": "https://github.com/Deric254/DericBI-Inventory-Control.git"
   },
   "main": "electron-main.js",
   "scripts": {
@@ -68,7 +68,7 @@
     "publish": {
       "provider": "github",
       "owner": "Deric254",
-      "repo": "inventory-control",
+      "repo": "DericBI-Inventory-Control",
       "releaseType": "draft"
     }
   }
