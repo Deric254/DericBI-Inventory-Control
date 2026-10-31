@@ -40,6 +40,12 @@ jobs:
           node-version: 20
           cache: npm
 
+      # Safety net: data integrity, auth and local-API protection must pass before anything ships.
+      - name: Backend tests
+        run: |
+          python -m pip install --quiet openpyxl reportlab
+          python -m unittest discover -s tests -v
+
       # Fresh installs are seeded from assets/. Refuse to build if real data or a PIN got in.
       - name: Guard - no private data in the installer
         shell: bash

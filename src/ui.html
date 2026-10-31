@@ -4,23 +4,31 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>DericBI Inventory Control v2</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
 <style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+/* Self-hosted fonts (SIL OFL) - no network needed */
+@font-face{font-family:'Inter';font-weight:400;font-style:normal;font-display:swap;src:url('/fonts/inter-latin-400-normal.woff2') format('woff2')}
+@font-face{font-family:'Inter';font-weight:500;font-style:normal;font-display:swap;src:url('/fonts/inter-latin-500-normal.woff2') format('woff2')}
+@font-face{font-family:'Inter';font-weight:600;font-style:normal;font-display:swap;src:url('/fonts/inter-latin-600-normal.woff2') format('woff2')}
+@font-face{font-family:'Inter';font-weight:700;font-style:normal;font-display:swap;src:url('/fonts/inter-latin-700-normal.woff2') format('woff2')}
+@font-face{font-family:'Syne';font-weight:600;font-style:normal;font-display:swap;src:url('/fonts/syne-latin-600-normal.woff2') format('woff2')}
+@font-face{font-family:'Syne';font-weight:700;font-style:normal;font-display:swap;src:url('/fonts/syne-latin-700-normal.woff2') format('woff2')}
+@font-face{font-family:'Syne';font-weight:800;font-style:normal;font-display:swap;src:url('/fonts/syne-latin-800-normal.woff2') format('woff2')}
+@font-face{font-family:'DM Mono';font-weight:400;font-style:normal;font-display:swap;src:url('/fonts/dm-mono-latin-400-normal.woff2') format('woff2')}
+@font-face{font-family:'DM Mono';font-weight:500;font-style:normal;font-display:swap;src:url('/fonts/dm-mono-latin-500-normal.woff2') format('woff2')}
 
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
   /* ── Dark base ── */
-  --bg:#090b0e;
-  --bg2:#0f1115;
-  --bg3:#16191f;
-  --bg4:#1d2128;
-  --bg5:#252930;
-  --text:#e8dfd4;
-  --text2:#8a7f74;
-  --text3:#4a4340;
-  --border:rgba(255,255,255,.055);
-  --border2:rgba(255,255,255,.10);
+  --bg:#080c14;
+  --bg2:#0d1220;
+  --bg3:#131a2b;
+  --bg4:#1a2338;
+  --bg5:#222d46;
+  --text:#e8ecf5;
+  --text2:#a1abc0;
+  --text3:#7a869d;
+  --border:rgba(148,163,200,.10);
+  --border2:rgba(148,163,200,.18);
 
   /* ── DericBI brand palette ── */
   --brand:#1E3A8A;          /* DericBI navy — primary */
@@ -609,16 +617,16 @@ body,
 
 /* ── LIGHT MODE ── */
 html.light{
-  --bg:#f5f3f0;
+  --bg:#f3f5f9;
   --bg2:#ffffff;
-  --bg3:#f0ede9;
-  --bg4:#e8e3dd;
-  --bg5:#ddd8d0;
-  --text:#1a110d;
-  --text2:#5a4a40;
-  --text3:#9a8880;
-  --border:rgba(0,0,0,.09);
-  --border2:rgba(0,0,0,.15);
+  --bg3:#eef1f6;
+  --bg4:#e3e8f0;
+  --bg5:#d6dde9;
+  --text:#0f1729;
+  --text2:#46526a;
+  --text3:#6b7690;
+  --border:rgba(15,23,41,.09);
+  --border2:rgba(15,23,41,.16);
   --brand:#1E3A8A;
   --brand-dim:rgba(30,58,138,.10);
   --brand-lt:#2F55C4;
@@ -681,6 +689,52 @@ html.light .qs{background:var(--bg3)}
 
 /* ── MONOSPACE ── */
 code, .mono{font-family:'DM Mono',monospace}
+
+/* ═════════ DericBI refinement layer ═════════ */
+:root{--radius:10px;--shadow-1:0 1px 2px rgba(0,0,0,.28);--shadow-2:0 10px 30px rgba(0,0,0,.38)}
+html.light{--shadow-1:0 1px 2px rgba(15,23,41,.08);--shadow-2:0 10px 30px rgba(15,23,41,.12)}
+body{font-family:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+::selection{background:rgba(253,200,25,.28)}
+.ic{flex-shrink:0;display:inline-block;vertical-align:-3px}
+.btn .ic{vertical-align:-2px}
+.brand-mark{background:none;box-shadow:none;border-radius:0;width:36px;height:36px}
+.brand-mark img{width:36px!important;height:36px!important;border-radius:0!important}
+.brand-name{font-size:14px;letter-spacing:.005em}
+.brand-sub{color:var(--text2)}
+.nav-btn{border-radius:8px;font-size:12.5px}
+.nav-btn .ni{display:inline-flex;align-items:center;justify-content:center;width:20px;font-size:0;opacity:1}
+.nav-btn .ni .ic{vertical-align:0;opacity:.8}
+.nav-btn:hover .ni .ic,.nav-btn.on .ni .ic{opacity:1}
+.nav-badge{animation:none}
+.nav-hd{color:var(--text3)}
+.sb-foot .btn{border-radius:8px}
+.btn{border-radius:8px;gap:.45rem}
+.btn.pri{background:var(--brand);border-color:rgba(255,255,255,.14);box-shadow:var(--shadow-1)}
+.btn.pri:hover{background:var(--brand-lt);box-shadow:var(--shadow-1);filter:none}
+.btn.ok{box-shadow:none}
+td .btn.sm{padding:.3rem .45rem}
+td .btn.sm .ic{display:block}
+.btn:focus-visible,.nav-btn:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,th:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.kpi,.card,.tbl-wrap{border-radius:var(--radius);box-shadow:var(--shadow-1)}
+.kpi:hover{box-shadow:var(--shadow-2)}
+.kpi-ico{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:9px;background:var(--bg4);color:var(--text2);opacity:1;margin-bottom:.8rem;font-size:0}
+.kpi-ico .ic{vertical-align:0}
+.kpi.blue .kpi-ico{color:#7ea0f2}.kpi.green .kpi-ico{color:var(--green)}.kpi.amber .kpi-ico{color:var(--amber)}
+.kpi.red .kpi-ico{color:var(--red)}.kpi.purple .kpi-ico{color:var(--purple)}.kpi.cyan .kpi-ico{color:var(--text2)}.kpi.teal .kpi-ico{color:var(--teal)}
+.kpi-v,.tb-kpi-v,td,.card-bd{font-variant-numeric:tabular-nums}
+.kpi-l{color:var(--text2)}
+.card-title{color:var(--text2);letter-spacing:.08em}
+thead th{color:var(--text2);background:var(--bg3)}
+tbody tr:hover{background:var(--bg3)}
+.srch-ico{display:flex;line-height:0;color:var(--text3)}
+.srch input,.fsel{border-radius:8px}
+.srch input:focus,.fsel:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(253,200,25,.16)}
+.badge{letter-spacing:.015em}
+#login-overlay input:focus{border-color:var(--gold)!important;box-shadow:0 0 0 3px rgba(253,200,25,.16)!important}
+.kpi-v{font-family:'Inter',sans-serif;font-weight:700;font-size:30px;letter-spacing:-.02em}
+.tb-kpi-v{font-family:'Inter',sans-serif;font-weight:700;letter-spacing:-.01em}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+@media print{.sidebar,.topbar{display:none!important}.main{height:auto;overflow:visible}}
 </style>
 </head>
 <body>
@@ -773,31 +827,31 @@ code, .mono{font-family:'DM Mono',monospace}
   </div>
   <nav class="nav">
     <div class="nav-hd">Main</div>
-    <button class="nav-btn on" onclick="nav('dashboard')" id="nb-dashboard"><span class="ni">📊</span>Dashboard</button>
-    <button class="nav-btn" onclick="nav('inventory')" id="nb-inventory"><span class="ni">📦</span>Inventory<span class="nav-badge" id="badge-repair" style="display:none">!</span></button>
+    <button class="nav-btn on" onclick="nav('dashboard')" id="nb-dashboard"><span class="ni"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg></span>Dashboard</button>
+    <button class="nav-btn" onclick="nav('inventory')" id="nb-inventory"><span class="ni"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8 12 3 3 8v8l9 5 9-5V8Z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg></span>Inventory<span class="nav-badge" id="badge-repair" style="display:none">!</span></button>
     <div class="nav-hd">Operations</div>
-    <button class="nav-btn" onclick="nav('transfers')" id="nb-transfers"><span class="ni">🔄</span>Transfers</button>
-    <button class="nav-btn" onclick="nav('history')" id="nb-history"><span class="ni">📋</span>Activity Log</button>
-    <button class="nav-btn" onclick="nav('report')" id="nb-report"><span class="ni">📄</span>Asset Report</button>
-    <button class="nav-btn" onclick="nav('ink')" id="nb-ink"><span class="ni">🖨️</span>Ink Station</button>
+    <button class="nav-btn" onclick="nav('transfers')" id="nb-transfers"><span class="ni"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h13l-4-4M17 17H4l4 4"/></svg></span>Transfers</button>
+    <button class="nav-btn" onclick="nav('history')" id="nb-history"><span class="ni"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg></span>Activity Log</button>
+    <button class="nav-btn" onclick="nav('report')" id="nb-report"><span class="ni"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg></span>Asset Report</button>
+    <button class="nav-btn" onclick="nav('ink')" id="nb-ink"><span class="ni"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3s6 6.2 6 10.5A6 6 0 0 1 6 13.5C6 9.2 12 3 12 3Z"/></svg></span>Ink Station</button>
     <div class="nav-hd">System</div>
-    <button class="nav-btn" onclick="nav('config')" id="nb-config"><span class="ni">⚙️</span>Customise</button>
-    <button class="nav-btn" onclick="nav('settings')" id="nb-settings"><span class="ni">🔒</span>Security</button>
+    <button class="nav-btn" onclick="nav('config')" id="nb-config"><span class="ni"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></span>Customise</button>
+    <button class="nav-btn" onclick="nav('settings')" id="nb-settings"><span class="ni"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>Security</button>
   </nav>
   <div class="sb-foot">
     <div style="color:var(--text3);font-size:10.5px;margin-bottom:.5rem;display:flex;align-items:center">
       <span class="sync-dot"></span>Live — Excel Database
     </div>
-    <button class="btn ghost sm" onclick="openExcel()" style="width:100%;justify-content:center;font-size:11.5px;margin-bottom:.375rem">📁 Open Excel File</button>
+    <button class="btn ghost sm" onclick="openExcel()" style="width:100%;justify-content:center;font-size:11.5px;margin-bottom:.375rem"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>Open Excel File</button>
     <div style="border-top:1px solid var(--border);padding-top:.625rem;margin-top:.25rem">
       <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem">
-        <div style="width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,#1E3A8A,#FDC819);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">🔑</div>
+        <div style="width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,#1E3A8A,#FDC819);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M16 7l3 3"/></svg></div>
         <div>
           <div style="font-size:11px;color:var(--text);font-weight:600">ICT Manager</div>
           <div style="font-size:10px;color:var(--text3)">Authenticated</div>
         </div>
       </div>
-      <button class="btn del sm" onclick="doLogout()" style="width:100%;justify-content:center;font-size:11.5px">🚪 Log Out</button>
+      <button class="btn del sm" onclick="doLogout()" style="width:100%;justify-content:center;font-size:11.5px"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>Log Out</button>
     </div>
   </div>
 </aside>
@@ -810,8 +864,8 @@ code, .mono{font-family:'DM Mono',monospace}
       <div class="tb-kpi"><div class="tb-kpi-v" id="tb-total" style="color:var(--blue)">0</div><div class="tb-kpi-l">Total</div></div>
       <div class="tb-kpi"><div class="tb-kpi-v" id="tb-repair" style="color:var(--amber)">0</div><div class="tb-kpi-l">Repair</div></div>
       <div class="tb-kpi"><div class="tb-kpi-v" id="tb-depts" style="color:var(--purple)">0</div><div class="tb-kpi-l">Depts</div></div>
-      <button class="btn ghost" onclick="toggleTheme()" id="theme-btn" title="Toggle light/dark mode" style="font-size:15px;padding:.35rem .6rem">🌙</button>
-      <button class="btn pri" onclick="openAddModal()">➕ Add Asset</button>
+      <button class="btn ghost" onclick="toggleTheme()" id="theme-btn" title="Toggle light/dark mode" style="padding:.4rem .55rem;line-height:0"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg></button>
+      <button class="btn pri" onclick="openAddModal()"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add Asset</button>
     </div>
   </div>
 
@@ -820,7 +874,7 @@ code, .mono{font-family:'DM Mono',monospace}
     <div class="kpi-grid" id="kpi-grid"></div>
     <div class="charts2" id="chart-area"></div>
     <div class="qs-row" id="qs-row"></div>
-    <div class="card"><div class="card-hd"><span class="card-title">🕐 Recent Activity</span></div>
+    <div class="card"><div class="card-hd"><span class="card-title">Recent Activity</span></div>
       <div class="card-bd" id="dash-log" style="max-height:260px;overflow-y:auto"></div>
     </div>
   </div>
@@ -828,7 +882,7 @@ code, .mono{font-family:'DM Mono',monospace}
   <!-- INVENTORY -->
   <div class="content sec" id="sec-inventory">
     <div class="toolbar">
-      <div class="srch"><span class="srch-ico">🔍</span><input id="inv-search" placeholder="Search assets…" oninput="resetPg();renderTable()"></div>
+      <div class="srch"><span class="srch-ico"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></span><input id="inv-search" placeholder="Search assets…" oninput="resetPg();renderTableSoon()"></div>
       <select class="fsel" id="ft" onchange="resetPg();renderTable()"><option value="">All types</option></select>
       <select class="fsel" id="fd" onchange="resetPg();renderTable()"><option value="">All depts</option></select>
       <select class="fsel" id="fc" onchange="resetPg();renderTable()"><option value="">All status</option></select>
@@ -868,7 +922,7 @@ code, .mono{font-family:'DM Mono',monospace}
         </div>
         <div class="card-bd">
           <div class="toolbar" style="margin-bottom:.5rem">
-            <div class="srch"><span class="srch-ico">🔍</span><input id="xfer-pick-search" placeholder="Search assets…" oninput="renderXferPicker()"></div>
+            <div class="srch"><span class="srch-ico"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></span><input id="xfer-pick-search" placeholder="Search assets…" oninput="renderXferPicker()"></div>
             <select class="fsel" id="xfer-pick-dept" onchange="renderXferPicker()"><option value="">All depts</option></select>
           </div>
           <div id="xfer-pick-list" style="max-height:300px;overflow-y:auto"></div>
@@ -884,7 +938,7 @@ code, .mono{font-family:'DM Mono',monospace}
   <!-- HISTORY / ACTIVITY LOG -->
   <div class="content sec" id="sec-history">
     <div class="toolbar">
-      <div class="srch"><span class="srch-ico">🔍</span><input id="hist-search" placeholder="Search activity…" oninput="renderHistory()"></div>
+      <div class="srch"><span class="srch-ico"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></span><input id="hist-search" placeholder="Search activity…" oninput="renderHistory()"></div>
       <select class="fsel" id="hist-filter" onchange="renderHistory()">
         <option value="">All events</option>
         <option value="transferred">Transfers</option>
@@ -1353,6 +1407,10 @@ Chart.prototype.draw = function(){
     if(plugins[i] && typeof plugins[i].afterDraw === 'function') plugins[i].afterDraw(this);
   }
 };
+function chartInk(k){
+  var light=document.documentElement.classList.contains('light');
+  return k===0?(light?'rgba(15,23,41,.10)':'rgba(240,246,252,.08)'):k===1?(light?'#0f1729':'#e8ecf5'):(light?'#46526a':'#a1abc0');
+}
 Chart.prototype._drawBar = function(size){
   var ctx = this.ctx;
   var labels = this.data.labels || [];
@@ -1362,8 +1420,8 @@ Chart.prototype._drawBar = function(size){
   var max = Math.max.apply(null, values.concat([1]));
   var left = 34, right = 10, top = 30, bottom = 38;
   var plotW = size.w-left-right, plotH = size.h-top-bottom;
-  ctx.strokeStyle='rgba(240,246,252,.08)';
-  ctx.fillStyle='#8b949e';
+  ctx.strokeStyle=chartInk(0);
+  ctx.fillStyle=chartInk(2);
   ctx.font='10px Inter, sans-serif';
   ctx.textAlign='right';
   for(var g=0;g<=3;g++){
@@ -1383,17 +1441,17 @@ Chart.prototype._drawBar = function(size){
     // Data label above bar: count + percentage
     if(val > 0){
       var pctLbl = (ds._totals && ds._totals[i]) ? ds._totals[i] : '';
-      ctx.fillStyle = '#e8dfd4';
+      ctx.fillStyle = chartInk(1);
       ctx.font = 'bold 10px Inter, sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText(val, x+barW/2, y-13);
       if(pctLbl){
-        ctx.fillStyle = '#8b949e';
+        ctx.fillStyle = chartInk(2);
         ctx.font = '9px Inter, sans-serif';
         ctx.fillText(pctLbl, x+barW/2, y-3);
       }
     }
-    ctx.fillStyle = '#8b949e';
+    ctx.fillStyle = chartInk(2);
     ctx.font = '10px Inter, sans-serif';
     ctx.textAlign = 'center';
     var txt = String(label || '');
@@ -1429,17 +1487,17 @@ Chart.prototype._drawDoughnut = function(size){
   ctx.font = '11px Inter, sans-serif';
   ctx.textAlign = 'left';
   var legendX = Math.floor(size.w * .68);
-  var legendStartY = Math.max(16, Math.floor(size.h/2) - labels.length*10);
+  var legendStartY = Math.max(16, Math.floor(size.h/2) - labels.length*15);
   labels.forEach(function(label,i){
     var val = values[i] || 0;
     var pct = total > 0 ? Math.round(val/total*100) : 0;
-    var y = legendStartY + i*22;
+    var y = legendStartY + i*30;
     ctx.fillStyle = colors[i % colors.length];
     ctx.beginPath(); ctx.roundRect(legendX, y-8, 10, 10, 2); ctx.fill();
-    ctx.fillStyle = '#c8d3dc';
+    ctx.fillStyle = chartInk(1);
     var lbl = label.length > 14 ? label.slice(0,13)+'…' : label;
     ctx.fillText(lbl, legendX+14, y);
-    ctx.fillStyle = '#8b949e';
+    ctx.fillStyle = chartInk(2);
     ctx.font = '10px Inter, sans-serif';
     ctx.fillText(val+' ('+pct+'%)', legendX+14, y+12);
     ctx.font = '11px Inter, sans-serif';
@@ -1448,6 +1506,8 @@ Chart.prototype._drawDoughnut = function(size){
 // ══════════════════════════════════════════════════════
 // CORE STATE
 // ══════════════════════════════════════════════════════
+var ICONS={"dashboard": "<rect x=\"3\" y=\"3\" width=\"7\" height=\"9\" rx=\"1.5\"/><rect x=\"14\" y=\"3\" width=\"7\" height=\"5\" rx=\"1.5\"/><rect x=\"14\" y=\"12\" width=\"7\" height=\"9\" rx=\"1.5\"/><rect x=\"3\" y=\"16\" width=\"7\" height=\"5\" rx=\"1.5\"/>", "inventory": "<path d=\"M21 8 12 3 3 8v8l9 5 9-5V8Z\"/><path d=\"m3 8 9 5 9-5M12 13v8\"/>", "transfer": "<path d=\"M7 7h13l-4-4M17 17H4l4 4\"/>", "log": "<path d=\"M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2\"/><rect x=\"9\" y=\"3\" width=\"6\" height=\"4\" rx=\"1\"/><path d=\"M9 12h6M9 16h4\"/>", "report": "<path d=\"M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z\"/><path d=\"M14 3v5h5M9 13h6M9 17h6\"/>", "ink": "<path d=\"M12 3s6 6.2 6 10.5A6 6 0 0 1 6 13.5C6 9.2 12 3 12 3Z\"/>", "config": "<path d=\"M4 6h10M18 6h2M4 12h2M10 12h10M4 18h12\"/><circle cx=\"16\" cy=\"6\" r=\"2\"/><circle cx=\"8\" cy=\"12\" r=\"2\"/><circle cx=\"18\" cy=\"18\" r=\"2\"/>", "lock": "<rect x=\"4\" y=\"11\" width=\"16\" height=\"10\" rx=\"2\"/><path d=\"M8 11V7a4 4 0 0 1 8 0v4\"/>", "plus": "<path d=\"M12 5v14M5 12h14\"/>", "edit": "<path d=\"M12 20h9\"/><path d=\"M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z\"/>", "wrench": "<path d=\"M14.7 6.3a4 4 0 0 0-5.4 5.1L3 17.7V21h3.3l6.3-6.3a4 4 0 0 0 5.1-5.4l-2.5 2.5-2.4-.6-.6-2.4Z\"/>", "refresh": "<path d=\"M21 12a9 9 0 0 0-15.5-6.2L3 8M3 3v5h5M3 12a9 9 0 0 0 15.5 6.2L21 16M21 21v-5h-5\"/>", "folder": "<path d=\"M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z\"/>", "logout": "<path d=\"M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9\"/>", "search": "<circle cx=\"11\" cy=\"11\" r=\"7\"/><path d=\"m21 21-4.3-4.3\"/>", "moon": "<path d=\"M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z\"/>", "sun": "<circle cx=\"12\" cy=\"12\" r=\"4\"/><path d=\"M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4\"/>", "box": "<path d=\"M21 8 12 3 3 8v8l9 5 9-5V8Z\"/><path d=\"m3 8 9 5 9-5\"/>", "check": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"m8 12 3 3 5-6\"/>", "alert": "<path d=\"M12 3 2 20h20L12 3Z\"/><path d=\"M12 10v4M12 17.5v.01\"/>", "trash": "<path d=\"M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3\"/>", "building": "<rect x=\"4\" y=\"3\" width=\"16\" height=\"18\" rx=\"1.5\"/><path d=\"M9 8h.01M15 8h.01M9 12h.01M15 12h.01M10 21v-4h4v4\"/>", "key": "<circle cx=\"8\" cy=\"15\" r=\"4\"/><path d=\"m11 12 9-9M16 7l3 3\"/>"};
+function icon(n,sz){return '<svg class="ic" width="'+(sz||16)+'" height="'+(sz||16)+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(ICONS[n]||'')+'</svg>';}
 var rows=[], inkState={}, logItems=[], histItems=[], cfg={departments:[],types:[],conditions:[]};
 var sortCol='Date Collected', sortAsc=false, curPage=1, perPage=25;
 var selectedRow=null;
@@ -1669,7 +1729,7 @@ function doLogin(){
     } else {
       var el=document.getElementById('login-err');
       el.style.display='';
-      el.textContent='Incorrect PIN. Access denied.';
+      el.textContent=res.error||'Incorrect PIN. Access denied.';
       document.getElementById('pin-input').value='';
       document.getElementById('pin-input').focus();
     }
@@ -1930,12 +1990,12 @@ function renderDashboard(){
   var depts=Object.keys(deptSet).length;
   var goodTotal=nNew+nGood+nFair; // matches report: New + Good + Fair = all operational
   document.getElementById('kpi-grid').innerHTML=
-    kpi('blue','📦',total,'Total Active Assets',depts+' departments')+
-    kpi('green','✅',goodTotal,'Operational',Math.round(total?(goodTotal/total)*100:0)+'% of fleet')+
-    kpi('amber','⚠️',repair,'Need Repair','Requires attention')+
-    kpi('purple','🔁',replaced,'Replaced','Lifecycle events')+
-    kpi('cyan','🗑️',disposed,'Disposed','Retired assets')+
-    kpi('teal','🏢',depts,'Departments','Active locations');
+    kpi('blue',icon('box',18),total,'Total Active Assets',depts+' departments')+
+    kpi('green',icon('check',18),goodTotal,'Operational',Math.round(total?(goodTotal/total)*100:0)+'% of fleet')+
+    kpi('amber',icon('alert',18),repair,'Need Repair','Requires attention')+
+    kpi('purple',icon('refresh',18),replaced,'Replaced','Lifecycle events')+
+    kpi('cyan',icon('trash',18),disposed,'Disposed','Retired assets')+
+    kpi('teal',icon('building',18),depts,'Departments','Active locations');
 
   // Charts
   var deptCounts={};
@@ -1949,8 +2009,8 @@ function renderDashboard(){
   var condValues=condLabels.map(function(k){return condData[k];});
   var condTotal=condValues.reduce(function(a,b){return a+b;},0);
 
-  var colors=['#58a6ff','#3fb950','#bc8cff','#d29922','#39c5bb','#f85149','#79c0ff','#56d364'];
-  var pieColors=['#58a6ff','#3fb950','#d29922','#bc8cff'];
+  var colors=['#4f7be8'];
+  var COND_COLORS={'New':'#4f7be8','Good':'#3fb950','Fair':'#d29922','Needs Repair':'#e5484d','Other':'#7b8794'};
 
   document.getElementById('chart-area').innerHTML=
     '<div class="card"><div class="card-hd"><span class="card-title">Assets by Department</span></div><div class="card-bd"><canvas id="ch-dept" data-height="200" style="display:block;width:100%"></canvas></div></div>'+
@@ -1964,11 +2024,11 @@ function renderDashboard(){
       type:'doughnut',
       data:{
         labels:condLabels,
-        datasets:[{data:condValues,backgroundColor:pieColors.slice(0,condLabels.length),borderWidth:0,hoverOffset:6}]
+        datasets:[{data:condValues,backgroundColor:condLabels.map(function(l){return COND_COLORS[l]||'#7b8794';}),borderWidth:0,hoverOffset:6}]
       },
       options:{
         plugins:{
-          legend:{position:'right',labels:{color:'#8b949e',font:{size:11},boxWidth:12,padding:8}},
+          legend:{position:'right',labels:{color:chartInk(2),font:{size:11},boxWidth:12,padding:8}},
           tooltip:{
             callbacks:{
               label:function(ctx){
@@ -2036,8 +2096,8 @@ function kpi(cls,ico,v,l,s){
 }
 
 function logIco(a){
-  var m={ADD:'➕',EDIT:'✏️',DELETE:'🗑️',INK:'🖨️',REPLACE:'🔁',TRANSFER:'🔄',REPAIRED:'🔧',UPGRADED:'⬆️',REASSIGNED:'👤',SERVICED:'🛠️'};
-  return m[a]||'📌';
+  var m={ADD:'plus',EDIT:'edit',DELETE:'trash',INK:'ink',REPLACE:'refresh',TRANSFER:'transfer',REPAIRED:'wrench',UPGRADED:'wrench',REASSIGNED:'key',SERVICED:'wrench',LOGIN:'lock',LOGOUT:'logout',SETUP:'lock'};
+  return icon(m[a]||'log',15);
 }
 
 // ══════════════════════════════════════════════════════
@@ -2099,11 +2159,11 @@ function renderTable(){
       '<td><span class="badge '+bc+'">'+escHtml(cond)+'</span></td>'+
       '<td>'+escHtml(r['Date Collected']||'')+'</td>'+
       '<td onclick="event.stopPropagation()" style="white-space:nowrap">'+
-        '<button class="btn sm ghost" onclick="openEditModal('+r._row+')" title="Edit">✏️</button>'+
-        '<button class="btn sm teal" onclick="openTransferForRow('+r._row+')" title="Transfer">🔄</button>'+
-        (needsRepair?'<button class="btn sm amber" onclick="openRepairConfirm('+r._row+')" title="Confirm Repair Done">🔧</button>':
-          '<button class="btn sm amber" onclick="openEventModal('+r._row+')" title="Log Event">📝</button>')+
-        '<button class="btn sm ghost" onclick="openReplaceModal('+r._row+')" title="Replace">🔁</button>'+
+        '<button class="btn sm ghost" onclick="openEditModal('+r._row+')" title="Edit" aria-label="Edit">'+icon('edit',14)+'</button>'+
+        '<button class="btn sm teal" onclick="openTransferForRow('+r._row+')" title="Transfer" aria-label="Transfer">'+icon('transfer',14)+'</button>'+
+        (needsRepair?'<button class="btn sm amber" onclick="openRepairConfirm('+r._row+')" title="Confirm Repair Done" aria-label="Confirm Repair Done">'+icon('wrench',14)+'</button>':
+          '<button class="btn sm amber" onclick="openEventModal('+r._row+')" title="Log Event" aria-label="Log Event">'+icon('log',14)+'</button>')+
+        '<button class="btn sm ghost" onclick="openReplaceModal('+r._row+')" title="Replace" aria-label="Replace">'+icon('refresh',14)+'</button>'+
       '</td></tr>';
   }).join('');
 
@@ -2118,6 +2178,8 @@ function renderTable(){
 }
 
 function goPg(d){curPage+=d;renderTable();}
+var _rtT=null;
+function renderTableSoon(){clearTimeout(_rtT);_rtT=setTimeout(renderTable,150);}
 
 function condBadgeClass(c){
   if(!c||c==='Good')return 'b-good';
@@ -3239,7 +3301,7 @@ function removeCfg(key, val){
 // ══════════════════════════════════════════════════════
 function doLogout(){
   if(!confirm('Log out now? You will need your PIN to get back in.')) return;
-  try { pywebview.api.log_action('LOGOUT','Session ended — user logged out'); } catch(e){}
+  try { pywebview.api.log_action('LOGOUT','Session ended - user logged out').then(function(){ return pywebview.api.lock_session(); }).catch(function(){ pywebview.api.lock_session(); }); } catch(e){ try{ pywebview.api.lock_session(); }catch(e2){} }
   // Clear all in-memory data
   rows=[]; inkState={}; logItems=[]; histItems=[];
   // Hide app, show login overlay
@@ -3354,23 +3416,35 @@ function applyTheme(light){
   if(light){
     document.documentElement.classList.add('light');
     var btn=document.getElementById('theme-btn');
-    if(btn) btn.textContent='☀️';
+    if(btn) btn.innerHTML=icon('sun',16);
   } else {
     document.documentElement.classList.remove('light');
     var btn=document.getElementById('theme-btn');
-    if(btn) btn.textContent='🌙';
+    if(btn) btn.innerHTML=icon('moon',16);
   }
 }
 function toggleTheme(){
   var isLight=document.documentElement.classList.contains('light');
   try{ localStorage.setItem('ict-theme', isLight?'dark':'light'); }catch(e){}
   applyTheme(!isLight);
+  try{ if(document.getElementById('sec-dashboard').classList.contains('on')) renderDashboard(); }catch(e){}
 }
 // Apply on load
 (function(){
   var saved='dark';
   try{ saved=localStorage.getItem('ict-theme')||'dark'; }catch(e){}
   applyTheme(saved==='light');
+})();
+
+(function(){
+  if(location.protocol.indexOf('http')!==0) return;
+  [['login-logo-img',0],['sidebar-logo-img',1]].forEach(function(p){
+    var e=document.getElementById(p[0]); if(!e) return;
+    var fb=p[1]?document.getElementById('sidebar-logo-fallback'):null;
+    e.onload=function(){ e.style.display=''; if(fb) fb.style.display='none'; };
+    e.onerror=function(){ e.style.display='none'; if(fb) fb.style.display=''; };
+    e.src='/logo';
+  });
 })();
 
 window.addEventListener('pywebviewready', function(){

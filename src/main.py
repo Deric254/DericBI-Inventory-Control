@@ -9,7 +9,7 @@ _os.environ.setdefault("PYWEBVIEW_GUI", "edgechromium")
 _os.environ.setdefault("WEBKIT_DISABLE_COMPOSITING_MODE", "1")
 _os.environ.setdefault("PYWEBVIEW_NO_UIAUTOMATION", "1")
 
-import json, os, sys, datetime, shutil, openpyxl, threading, re, hashlib, secrets
+import json, os, sys, datetime, shutil, openpyxl, threading, re, hashlib, secrets, hmac, time, zipfile
 import http.server, socketserver, webbrowser, urllib.parse
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
@@ -89,9 +89,63 @@ DEFAULT_CONDITIONS = [
 def today(): return datetime.date.today().strftime("%Y-%m-%d")
 def now():   return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+# ── Integrity helpers ─────────────────────────────────────────────────────────
+MAX_CELL_CHARS = 32000          # Excel hard limit is 32,767 per cell
+
+def _fsync_path(path):
+    with open(path, "r+b") as f:
+        f.flush(); os.fsync(f.fileno())
+
+_DB_GEN = 0   # bumped on every database write; part of the read-cache key
+
+def _atomic_save(wb, path):
+    """Write the workbook to a temp file, flush it to disk, then swap it in with
+    one atomic rename. A crash or power cut can never leave a half-written database."""
+    global _DB_GEN
+    tmp = path + ".tmp"
+    wb.save(tmp)
+    _fsync_path(tmp)
+    os.replace(tmp, path)
+    _DB_GEN += 1
+
+def _atomic_write_bytes(path, data):
+    global _DB_GEN
+    _DB_GEN += 1
+    tmp = path + ".tmp"
+    with open(tmp, "wb") as f:
+        f.write(data); f.flush(); os.fsync(f.fileno())
+    os.replace(tmp, path)
+
+def _atomic_write_json(path, obj, **kw):
+    _atomic_write_bytes(path, json.dumps(obj, **kw).encode("utf-8"))
+
+def _textify_row(ws, row):
+    """openpyxl turns any string starting with '=' into a live formula. User-typed
+    text must stay text (prevents formula injection when the file is opened in Excel)."""
+    for cell in ws[row]:
+        v = cell.value
+        if isinstance(v, str) and v[:1] == "=":
+            cell.data_type = "s"
+
+def _check_fields(data):
+    if not isinstance(data, dict):
+        raise ValueError("Invalid data")
+    for k, v in data.items():
+        if isinstance(v, str) and len(v) > MAX_CELL_CHARS:
+            raise ValueError(f"'{k}' is too long ({len(v):,} characters; limit {MAX_CELL_CHARS:,})")
+
 # ════════════════════════════════════════════
 # CONFIG ENGINE
 # ════════════════════════════════════════════
+# ── Credential hashing ────────────────────────────────────────────────────────
+_PBKDF2_ITERS = 600_000
+
+def _kdf(secret, salt_hex, iters=None, legacy=False):
+    """PBKDF2-HMAC-SHA256 (current). legacy=True verifies old single-pass SHA-256 hashes."""
+    if legacy:
+        return hashlib.sha256((salt_hex + secret).encode()).hexdigest()
+    return hashlib.pbkdf2_hmac("sha256", secret.encode(), bytes.fromhex(salt_hex), int(iters or _PBKDF2_ITERS)).hex()
+
 class ConfigEngine:
     def __init__(self):
         self._lock = threading.Lock()
@@ -106,8 +160,7 @@ class ConfigEngine:
         return {"departments": DEFAULT_DEPTS[:], "types": DEFAULT_TYPES[:], "conditions": DEFAULT_CONDITIONS[:]}
 
     def _save(self):
-        with open(CONFIG_FILE, 'w') as f:
-            json.dump(self._data, f, indent=2)
+        _atomic_write_json(CONFIG_FILE, self._data, indent=2)
 
     def get(self):
         with self._lock:
@@ -137,7 +190,15 @@ class ConfigEngine:
 class ExcelEngine:
     def __init__(self):
         self._lock = threading.Lock()
+        try:
+            if os.path.exists(MASTER_XL + ".tmp"): os.remove(MASTER_XL + ".tmp")   # leftover from an interrupted save
+        except OSError: pass
         self._ensure_workbook()
+
+    @staticmethod
+    def _valid_row(ws, row_num):
+        if not isinstance(row_num, int) or row_num < 2 or row_num > ws.max_row:
+            raise ValueError(f"Row {row_num} no longer exists — refresh and try again")
 
     def _init_headers(self, ws, name):
         hdrs = {
@@ -171,6 +232,7 @@ class ExcelEngine:
         # Sanitise strings to avoid charmap codec errors on Windows
         def _safe(s): return str(s).encode("utf-8","replace").decode("utf-8") if s else ""
         wb[SHEET_LOG].append([now(), action, _safe(desc), _safe(by)])
+        _textify_row(wb[SHEET_LOG], wb[SHEET_LOG].max_row)
 
     def _backup(self):
         try:
@@ -185,6 +247,16 @@ class ExcelEngine:
             ])
             for old in backups[:-5]:
                 try: os.remove(old)
+                except: pass
+            # One long-term snapshot per day, kept 30 days (so a mistake noticed
+            # a week later is still recoverable). Lives in backups/daily/.
+            daily_dir = os.path.join(BACKUP_DIR, "daily")
+            os.makedirs(daily_dir, exist_ok=True)
+            daily = os.path.join(daily_dir, f"ICT_daily_{datetime.date.today():%Y%m%d}.xlsx")
+            if not os.path.exists(daily):
+                shutil.copy2(MASTER_XL, daily)
+            for old in sorted(f for f in os.listdir(daily_dir) if f.endswith(".xlsx"))[:-30]:
+                try: os.remove(os.path.join(daily_dir, old))
                 except: pass
         except Exception:
             pass  # Never let a backup failure block the actual write
@@ -213,7 +285,7 @@ class ExcelEngine:
                     row.append('')
                 ws_inv.append(row)
             self._set_widths(ws_inv)
-            wb.save(MASTER_XL); wb.close()
+            _atomic_save(wb, MASTER_XL); wb.close()
             return
         changed = False
         for sheet in ALL_SHEETS:
@@ -233,7 +305,7 @@ class ExcelEngine:
                     ws.cell(1, col).fill  = PatternFill("solid", fgColor="1F2937")
                     changed = True
         if changed:
-            wb.save(MASTER_XL)
+            _atomic_save(wb, MASTER_XL)
         wb.close()
 
     def _read_old_rows(self, wb, sheet_name):
@@ -272,7 +344,7 @@ class ExcelEngine:
         wb.remove(wb.active)
         for s in ALL_SHEETS:
             self._init_headers(wb.create_sheet(s), s)
-        wb.save(MASTER_XL)
+        _atomic_save(wb, MASTER_XL)
 
     def _clean(self, v):
         if v is None: return ''
@@ -284,7 +356,7 @@ class ExcelEngine:
     # ── READ ─────────────────────────────────
     def load_all(self):
         with self._lock:
-            wb   = openpyxl.load_workbook(MASTER_XL, data_only=True)
+            wb   = openpyxl.load_workbook(MASTER_XL, data_only=True, read_only=True)
             inv  = self._read_inv(wb)
             ink  = self._read_ink(wb)
             log  = self._read_log(wb)
@@ -292,12 +364,27 @@ class ExcelEngine:
             wb.close()
             return {"inventory": inv, "ink": ink, "log": log, "history": hist}
 
+    def load_all_json(self):
+        """JSON for the UI, cached until the database file changes (our own writes,
+        a restore, or someone editing the workbook in Excel all invalidate it)."""
+        with self._lock:
+            st  = os.stat(MASTER_XL)
+            key = (st.st_mtime_ns, st.st_size, _DB_GEN)
+            c   = getattr(self, "_jcache", None)
+            if c and c[0] == key:
+                return c[1]
+        txt = json.dumps(self.load_all())
+        # Store under the key captured BEFORE reading: if a write slipped in meanwhile
+        # the key no longer matches and the next call simply re-reads (never stale).
+        self._jcache = (key, txt)
+        return txt
+
     def log_session(self, action, desc, by="ICT Manager"):
         """Write a standalone audit log entry without touching other sheets."""
         with self._lock:
             wb = openpyxl.load_workbook(MASTER_XL)
             self._write_log(wb, action, desc, by)
-            wb.save(MASTER_XL); wb.close()
+            _atomic_save(wb, MASTER_XL); wb.close()
 
     def _read_inv(self, wb):
         ws   = wb[SHEET_INV]
@@ -378,9 +465,10 @@ class ExcelEngine:
             row_data = [data.get(c, '') for c in INV_COLS]
             ws.append(row_data)
             new_row = ws.max_row
+            _textify_row(ws, new_row)
             self._set_widths(ws)
             self._write_log(wb, 'ADD', f"Added: {data.get('Equipment Type','')} — {data.get('Brand/Model','')} | {data.get('Department/Location','')}")
-            wb.save(MASTER_XL); wb.close()
+            _atomic_save(wb, MASTER_XL); wb.close()
             return new_row
 
     def update_asset(self, row_num, data):
@@ -388,20 +476,23 @@ class ExcelEngine:
             self._backup()
             wb = openpyxl.load_workbook(MASTER_XL)
             ws = wb[SHEET_INV]
+            self._valid_row(ws, row_num)
             h  = [ws.cell(1,c).value for c in range(1,len(INV_COLS)+2)]
             for j, col in enumerate(h, 1):
                 if col in data:
                     ws.cell(row=row_num, column=j).value = data[col]
+            _textify_row(ws, row_num)
             self._write_log(wb, 'EDIT', f"Edited row {row_num}: {data.get('Equipment Type','')} — {data.get('Brand/Model','')}")
-            wb.save(MASTER_XL); wb.close()
+            _atomic_save(wb, MASTER_XL); wb.close()
 
     def delete_asset(self, row_num, desc):
         with self._lock:
             self._backup()
             wb = openpyxl.load_workbook(MASTER_XL)
+            self._valid_row(wb[SHEET_INV], row_num)
             wb[SHEET_INV].delete_rows(row_num)
             self._write_log(wb, 'DELETE', f"Deleted: {desc}")
-            wb.save(MASTER_XL); wb.close()
+            _atomic_save(wb, MASTER_XL); wb.close()
 
     def transfer_asset(self, row_num, asset_desc, serial, from_dept, to_dept, note, date, by='ICT Manager'):
         """Transfer an asset to another department — updates Inventory + logs history."""
@@ -409,6 +500,7 @@ class ExcelEngine:
             self._backup()
             wb     = openpyxl.load_workbook(MASTER_XL)
             ws_inv = wb[SHEET_INV]
+            self._valid_row(ws_inv, row_num)
             h      = [ws_inv.cell(1,c).value for c in range(1, ws_inv.max_column+1)]
             def col_idx(name):
                 try: return h.index(name)+1
@@ -426,14 +518,16 @@ class ExcelEngine:
             by_val = by if by and by.strip() else "ICT Manager"
             wb[SHEET_HISTORY].append([date, asset_desc, serial, from_dept, to_dept, "transferred",
                 f"Transferred from {from_dept} to {to_dept}. Note: {note}", by_val])
+            _textify_row(ws_inv, row_num); _textify_row(wb[SHEET_HISTORY], wb[SHEET_HISTORY].max_row)
             self._write_log(wb, 'TRANSFER', f"Transferred {asset_desc} (S/N:{serial}) from {from_dept} → {to_dept}")
-            wb.save(MASTER_XL); wb.close()
+            _atomic_save(wb, MASTER_XL); wb.close()
 
     def record_replacement(self, old_row, old_desc, rep):
         with self._lock:
             self._backup()
             wb     = openpyxl.load_workbook(MASTER_XL)
             ws_inv = wb[SHEET_INV]
+            self._valid_row(ws_inv, old_row)
             h      = [ws_inv.cell(1,c).value for c in range(1, len(INV_COLS)+2)]
             def col_idx(name):
                 try: return h.index(name)+1
@@ -458,8 +552,10 @@ class ExcelEngine:
             wb[SHEET_HISTORY].append([rep['date'],old_desc,rep.get('oldSerial',''),rep.get('dept',''),
                 rep.get('dept',''),"replaced",
                 f"Replaced with: {rep.get('newType','')} {rep.get('newBrand','')} S/N:{rep.get('newSerial','')}. Note: {rep['note']}","ICT Manager"])
+            _textify_row(ws_inv, old_row); _textify_row(ws_inv, ws_inv.max_row)
+            _textify_row(wb[SHEET_REPLACE], wb[SHEET_REPLACE].max_row); _textify_row(wb[SHEET_HISTORY], wb[SHEET_HISTORY].max_row)
             self._write_log(wb,'REPLACE',f"Replaced {old_desc} → {rep.get('newBrand','')} on {rep['date']}")
-            wb.save(MASTER_XL); wb.close()
+            _atomic_save(wb, MASTER_XL); wb.close()
 
     def write_history_event(self, asset_desc, serial, dept, event, note, date, cost='', by='ICT Manager'):
         with self._lock:
@@ -502,14 +598,16 @@ class ExcelEngine:
                                     ws.cell(row, assign_col).value = m.group(1).strip()
                             break
 
+            _textify_row(wb[SHEET_HISTORY], wb[SHEET_HISTORY].max_row)
             self._write_log(wb, event.upper(), f"{event} on {asset_desc}: {note[:80]}")
-            wb.save(MASTER_XL); wb.close()
+            _atomic_save(wb, MASTER_XL); wb.close()
 
     def write_ink(self, code, action, qty, ict_room_after, note=''):
         with self._lock:
             wb = openpyxl.load_workbook(MASTER_XL)
             # Columns: Timestamp, Code, Name, Action, Qty, ICT Room (snapshot), _, Note
             wb[SHEET_INK].append([now(), code, INK_NAMES.get(code,code), action, qty, ict_room_after, 0, note])
+            _textify_row(wb[SHEET_INK], wb[SHEET_INK].max_row)
             if action == 'restock':
                 self._write_log(wb, 'INK', f"Ink restocked to store: {qty}x {INK_NAMES.get(code,code)} ({code})")
             elif action == 'move_to_ict':
@@ -518,12 +616,12 @@ class ExcelEngine:
                 self._write_log(wb, 'INK', f"Ink used: {qty}x {INK_NAMES.get(code,code)} ({code})")
             else:
                 self._write_log(wb, 'INK', f"Ink {action}: {qty}x {INK_NAMES.get(code,code)} ({code})")
-            wb.save(MASTER_XL); wb.close()
+            _atomic_save(wb, MASTER_XL); wb.close()
 
     def get_transfer_log(self):
         """Return all transfer history entries."""
         with self._lock:
-            wb  = openpyxl.load_workbook(MASTER_XL, data_only=True)
+            wb  = openpyxl.load_workbook(MASTER_XL, data_only=True, read_only=True)
             ws  = wb[SHEET_HISTORY]
             out = []
             for row in list(ws.values)[1:]:
@@ -549,10 +647,40 @@ class Api:
         self.engine = engine
         self.cfg    = cfg
         self.window = None
+        self._authed      = False     # True after a correct PIN this session
+        self._recovery_ok = False     # True after a correct recovery key (allows PIN reset)
+        self._fails       = 0
+        self._locked_until = 0.0
+
+    # Methods callable before login. Everything else needs an authenticated session.
+    PUBLIC_METHODS = frozenset({"is_pin_set", "verify_pin", "verify_recovery_key",
+                                "set_pin", "get_logo_path", "lock_session"})
+
+    def needs_login(self):
+        return os.path.exists(AUTH_FILE) and not self._authed
+
+    def lock_session(self):
+        self._authed = False
+        self._recovery_ok = False
+        return json.dumps({"ok": True})
+
+    def _throttle(self):
+        wait = self._locked_until - time.time()
+        if wait > 0:
+            return f"Too many attempts. Try again in {int(wait) + 1} seconds."
+        return None
+
+    def _register_fail(self):
+        self._fails += 1
+        if self._fails >= 5:
+            self._locked_until = time.time() + min(900, 30 * 2 ** (self._fails - 5))
+
+    def _register_ok(self):
+        self._fails = 0; self._locked_until = 0.0
 
     def load_data(self):
         try:
-            return json.dumps({"ok": True, "data": self.engine.load_all()})
+            return '{"ok": true, "data": ' + self.engine.load_all_json() + '}'
         except Exception as e:
             return json.dumps({"ok": False, "error": str(e)})
 
@@ -579,6 +707,7 @@ class Api:
     def add_asset(self, data_json):
         try:
             data = json.loads(data_json)
+            _check_fields(data)
             if not data.get('Equipment Type'):
                 return json.dumps({"ok": False, "error": "Equipment Type is required"})
             if not data.get('Date Collected'):
@@ -589,7 +718,8 @@ class Api:
 
     def update_asset(self, row_num, data_json):
         try:
-            self.engine.update_asset(int(row_num), json.loads(data_json))
+            _d = json.loads(data_json); _check_fields(_d)
+            self.engine.update_asset(int(row_num), _d)
             return json.dumps({"ok": True})
         except Exception as e:
             return json.dumps({"ok": False, "error": str(e)})
@@ -773,25 +903,42 @@ class Api:
                 # Must contain the master data file
                 if "ICT_MASTER.xlsx" not in names:
                     return json.dumps({"ok": False, "error": "Backup is missing ICT_MASTER.xlsx — cannot restore."})
+                # Refuse oversized / malicious archives (zip bombs)
+                if sum(i.file_size for i in zf.infolist()) > 4 * 1024**3:
+                    return json.dumps({"ok": False, "error": "Backup archive is too large to restore safely."})
+                # Validate the database inside the backup BEFORE touching live data
+                import tempfile
+                with tempfile.TemporaryDirectory() as td:
+                    probe = os.path.join(td, "probe.xlsx")
+                    with open(probe, "wb") as f: f.write(zf.read("ICT_MASTER.xlsx"))
+                    try:
+                        _wb = openpyxl.load_workbook(probe, read_only=True)
+                        missing = [n for n in (SHEET_INV, SHEET_HISTORY, SHEET_INK, SHEET_LOG) if n not in _wb.sheetnames]
+                        _wb.close()
+                    except Exception:
+                        return json.dumps({"ok": False, "error": "The database inside this backup is damaged — nothing was changed."})
+                    if missing:
+                        return json.dumps({"ok": False, "error": "Backup database is missing sheets: " + ", ".join(missing) + " — nothing was changed."})
                 # Restore under the lock so no writes happen concurrently
                 with self.engine._lock:
-                    # Restore core files
+                    # Safety net: snapshot the current database first
+                    try:
+                        os.makedirs(os.path.join(BACKUP_DIR, "pre-restore"), exist_ok=True)
+                        shutil.copy2(MASTER_XL, os.path.join(BACKUP_DIR, "pre-restore", f"before_restore_{datetime.datetime.now():%Y%m%d_%H%M%S}.xlsx"))
+                    except Exception: pass
                     for fname, fpath in [
                         ("ICT_MASTER.xlsx", MASTER_XL),
                         ("auth.json",       AUTH_FILE),
                         ("config.json",     CONFIG_FILE),
                     ]:
                         if fname in names:
-                            with open(fpath, 'wb') as f:
-                                f.write(zf.read(fname))
-                    # Restore backups
+                            _atomic_write_bytes(fpath, zf.read(fname))
                     os.makedirs(BACKUP_DIR, exist_ok=True)
                     for name in names:
                         if name.startswith("backups/") and name.endswith(".xlsx"):
                             fname = os.path.basename(name)
                             if fname:
-                                with open(os.path.join(BACKUP_DIR, fname), 'wb') as f:
-                                    f.write(zf.read(name))
+                                _atomic_write_bytes(os.path.join(BACKUP_DIR, fname), zf.read(name))
             return json.dumps({"ok": True})
         except Exception as e:
             return json.dumps({"ok": False, "error": str(e)})
@@ -812,24 +959,23 @@ class Api:
 
     def set_pin(self, pin):
         try:
-            if len(pin.strip()) < 4:
+            # Changing an existing PIN needs a logged-in session or a verified recovery key.
+            if os.path.exists(AUTH_FILE) and not (self._authed or self._recovery_ok):
+                return json.dumps({"ok": False, "error": "Not authorised"})
+            if not isinstance(pin, str) or len(pin.strip()) < 4:
                 return json.dumps({"ok": False, "error": "PIN must be at least 4 characters"})
-            # Generate PIN hash
             salt = secrets.token_hex(16)
-            h    = hashlib.sha256((salt + pin).encode()).hexdigest()
-            # Generate a recovery key: XXXX-XXXX-XXXX-XXXX
+            h    = _kdf(pin, salt)
+            # Recovery key: XXXX-XXXX-XXXX-XXXX (shown once; only a hash is stored)
             raw_key = secrets.token_hex(8).upper()
             rkey_display = '-'.join([raw_key[i:i+4] for i in range(0, 16, 4)])
             rkey_salt = secrets.token_hex(16)
-            rkey_hash = hashlib.sha256((rkey_salt + rkey_display).encode()).hexdigest()
-            # Store a masked hint (first char of each group visible) for Settings display
-            parts = rkey_display.split('-')
-            rkey_hint = '-'.join([p[0]+'***' for p in parts])
-            with open(AUTH_FILE, 'w') as f:
-                json.dump({"hash": h, "salt": salt,
-                           "rkey_hash": rkey_hash, "rkey_salt": rkey_salt,
-                           "rkey_hint": rkey_hint,
-                           "rkey_plain": rkey_display}, f)  # stored for Settings display
+            rkey_hash = _kdf(rkey_display, rkey_salt)
+            rkey_hint = '-'.join([p[0]+'***' for p in rkey_display.split('-')])
+            _atomic_write_json(AUTH_FILE, {"hash": h, "salt": salt, "kdf": "pbkdf2", "iters": _PBKDF2_ITERS,
+                                           "rkey_hash": rkey_hash, "rkey_salt": rkey_salt, "rkey_kdf": "pbkdf2",
+                                           "rkey_iters": _PBKDF2_ITERS, "rkey_hint": rkey_hint})
+            self._authed = True; self._recovery_ok = False; self._register_ok()
             return json.dumps({"ok": True, "recovery_key": rkey_display})
         except Exception as e:
             return json.dumps({"ok": False, "error": str(e)})
@@ -840,7 +986,7 @@ class Api:
                 return json.dumps({"ok": False, "key": None})
             with open(AUTH_FILE) as f:
                 data = json.load(f)
-            # Return the full key for display in Settings (user is already authenticated)
+            # Older installs stored the key readable; new PINs store only a masked hint.
             key = data.get('rkey_plain') or data.get('rkey_hint') or None
             return json.dumps({"ok": True, "key": key})
         except Exception as e:
@@ -848,27 +994,45 @@ class Api:
 
     def verify_recovery_key(self, key):
         try:
+            msg = self._throttle()
+            if msg: return json.dumps({"valid": False, "error": msg})
             if not os.path.exists(AUTH_FILE):
                 return json.dumps({"valid": False})
             with open(AUTH_FILE) as f:
                 data = json.load(f)
-            rkey_hash = data.get('rkey_hash')
-            rkey_salt = data.get('rkey_salt')
+            rkey_hash = data.get('rkey_hash'); rkey_salt = data.get('rkey_salt')
             if not rkey_hash or not rkey_salt:
                 return json.dumps({"valid": False})
-            h = hashlib.sha256((rkey_salt + key.strip().upper()).encode()).hexdigest()
-            return json.dumps({"valid": h == rkey_hash})
+            cand = _kdf(str(key).strip().upper(), rkey_salt, data.get('rkey_iters'), legacy=(data.get('rkey_kdf') != 'pbkdf2'))
+            ok = hmac.compare_digest(cand, rkey_hash)
+            if ok: self._recovery_ok = True; self._register_ok()
+            else:  self._register_fail()
+            return json.dumps({"valid": ok})
         except Exception as e:
             return json.dumps({"valid": False, "error": str(e)})
 
     def verify_pin(self, pin):
         try:
+            msg = self._throttle()
+            if msg: return json.dumps({"ok": True, "valid": False, "error": msg})
             if not os.path.exists(AUTH_FILE):
                 return json.dumps({"ok": False, "error": "No PIN set"})
             with open(AUTH_FILE) as f:
                 data = json.load(f)
-            h = hashlib.sha256((data['salt'] + pin).encode()).hexdigest()
-            return json.dumps({"ok": True, "valid": h == data['hash']})
+            legacy = data.get('kdf') != 'pbkdf2'
+            cand = _kdf(str(pin), data['salt'], data.get('iters'), legacy=legacy)
+            ok = hmac.compare_digest(cand, data['hash'])
+            if ok:
+                self._authed = True; self._register_ok()
+                if legacy:   # silently upgrade an old SHA-256 PIN hash to PBKDF2
+                    try:
+                        salt = secrets.token_hex(16)
+                        data.update({"hash": _kdf(str(pin), salt), "salt": salt, "kdf": "pbkdf2", "iters": _PBKDF2_ITERS})
+                        _atomic_write_json(AUTH_FILE, data)
+                    except Exception: pass
+            else:
+                self._register_fail()
+            return json.dumps({"ok": True, "valid": ok})
         except Exception as e:
             return json.dumps({"ok": False, "error": str(e)})
 
@@ -1026,6 +1190,11 @@ class Api:
 # ════════════════════════════════════════════
 # LAUNCH
 # ════════════════════════════════════════════
+# Per-session secret. In Electron it is generated by the main process (ICT_API_TOKEN)
+# and added to every call over IPC; in browser mode it is injected into the page.
+API_TOKEN = os.environ.get("ICT_API_TOKEN") or secrets.token_hex(32)
+MAX_BODY_BYTES = 768 * 1024 * 1024
+
 BROWSER_BRIDGE = """
 <script>
 (function(){
@@ -1035,7 +1204,7 @@ BROWSER_BRIDGE = """
       return function() {
         return fetch('/api/' + encodeURIComponent(name), {
           method: 'POST',
-          headers: {'Content-Type': 'application/json'},
+          headers: {'Content-Type': 'application/json', 'X-ICT-Token': '__ICT_TOKEN__'},
           body: JSON.stringify({args: Array.prototype.slice.call(arguments)})
         }).then(function(r) { return r.text(); });
       };
@@ -1063,6 +1232,21 @@ def make_handler(api, ui_path, browser_mode=False):
         def log_message(self, fmt, *args):
             return
 
+        CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
+               "img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; "
+               "object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+
+        def _security_headers(self):
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("X-Frame-Options", "DENY")
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header("Cache-Control", getattr(self, "_cache_ctl", "no-store"))
+            self.send_header("Content-Security-Policy", self.CSP)
+
+        def end_headers(self):
+            self._security_headers()
+            super().end_headers()
+
         def _send(self, status, body, content_type="text/plain; charset=utf-8"):
             if isinstance(body, str):
                 body = body.encode("utf-8")
@@ -1072,8 +1256,23 @@ def make_handler(api, ui_path, browser_mode=False):
             self.end_headers()
             self.wfile.write(body)
 
+        def _origin_ok(self):
+            """Block DNS-rebinding (bad Host) and cross-site requests (foreign Origin)."""
+            port = self.server.server_port
+            hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
+            if self.headers.get("Host", "") not in hosts:
+                return False
+            origin = self.headers.get("Origin")
+            if origin and origin not in {f"http://{h}" for h in hosts}:
+                return False
+            return True
+
         def do_GET(self):
+            if not self._origin_ok():
+                self._send(403, "Forbidden"); return
             path = urllib.parse.urlparse(self.path).path
+            if (path.startswith("/reports/") or path.startswith("/backups/")) and api.needs_login():
+                self._send(401, "Locked"); return
             if path in ("/", "/ui.html"):
                 with open(ui_path, "r", encoding="utf-8") as f:
                     html = f.read()
@@ -1081,9 +1280,24 @@ def make_handler(api, ui_path, browser_mode=False):
                 # In desktop (pywebview) mode pywebview injects its own native
                 # js_api bridge — injecting ours would overwrite it.
                 if browser_mode:
-                    html = html.replace("</head>", BROWSER_BRIDGE + "\n</head>", 1)
+                    html = html.replace("</head>", BROWSER_BRIDGE.replace("__ICT_TOKEN__", API_TOKEN) + "\n</head>", 1)
                 self._send(200, html, "text/html; charset=utf-8")
                 return
+            # Self-hosted UI fonts (whitelisted file names only)
+            if path.startswith("/fonts/"):
+                fname = urllib.parse.unquote(path[len("/fonts/"):])
+                fpath = os.path.join(BUNDLE_DIR, "fonts", fname)
+                if re.fullmatch(r"[A-Za-z0-9._-]+\.woff2", fname) and os.path.isfile(fpath):
+                    with open(fpath, "rb") as ff:
+                        data = ff.read()
+                    self._cache_ctl = "public, max-age=604800, immutable"
+                    self.send_response(200)
+                    self.send_header("Content-Type", "font/woff2")
+                    self.send_header("Content-Length", str(len(data)))
+                    self.end_headers()
+                    self.wfile.write(data)
+                    return
+                self._send(404, "Not found"); return
             # Serve logo image over HTTP (needed in Electron mode — file:// blocked)
             if path == "/logo":
                 for lname in ['logo.png','logo.jpg','logo.jpeg','LOGO.PNG','LOGO.JPG']:
@@ -1136,19 +1350,33 @@ def make_handler(api, ui_path, browser_mode=False):
             self._send(404, "Not found")
 
         def do_POST(self):
+            if not self._origin_ok():
+                self._send(403, json.dumps({"ok": False, "error": "Forbidden"})); return
+            if not hmac.compare_digest(self.headers.get("X-ICT-Token", ""), API_TOKEN):
+                self._send(403, json.dumps({"ok": False, "error": "Forbidden"})); return
             path = urllib.parse.urlparse(self.path).path
             if not path.startswith("/api/"):
                 self._send(404, "Not found")
                 return
             name = urllib.parse.unquote(path.split("/api/", 1)[1])
-            if name.startswith("_") or not hasattr(api, name):
+            if name.startswith("_") or name.isupper() or not callable(getattr(api, name, None)) or name in ("needs_login",):
                 self._send(404, json.dumps({"ok": False, "error": "Unknown API method"}))
+                return
+            if name not in api.PUBLIC_METHODS and api.needs_login():
+                self._send(401, json.dumps({"ok": False, "locked": True, "error": "Session locked — please log in again"}))
                 return
             try:
                 length = int(self.headers.get("Content-Length", "0"))
+                if length < 0 or length > MAX_BODY_BYTES:
+                    self._send(413, json.dumps({"ok": False, "error": "Request too large"})); return
                 payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
-                result = getattr(api, name)(*payload.get("args", []))
+                args = payload.get("args", [])
+                if not isinstance(args, list):
+                    self._send(400, json.dumps({"ok": False, "error": "Bad request"})); return
+                result = getattr(api, name)(*args)
                 self._send(200, result)
+            except (ValueError, TypeError) as e:
+                self._send(400, json.dumps({"ok": False, "error": str(e)}))
             except Exception as e:
                 self._send(500, json.dumps({"ok": False, "error": str(e)}))
 

@@ -35,12 +35,17 @@ function getDataDir() {
 }
 const DATA_DIR = getDataDir();
 
+// Per-session secret: only this process knows it, so no other program or web page
+// can call the local backend API.
+const API_TOKEN = require('crypto').randomBytes(32).toString('hex');
+
 // One-time migration: pre-rebrand installs stored data in 'ICT Command Centre'.
 // Copy (never move) it so existing data survives the rename.
 try {
   const LEGACY_DIR = path.join(DATA_DIR, '..', 'ICT Command Centre');
   if (IS_PACKED && !fs.existsSync(DATA_DIR) && fs.existsSync(LEGACY_DIR)) {
-    fs.cpSync(LEGACY_DIR, DATA_DIR, { recursive: true });
+    // logo.png is skipped so the new DericBI logo is seeded instead of the old one
+    fs.cpSync(LEGACY_DIR, DATA_DIR, { recursive: true, filter: src => path.basename(src).toLowerCase() !== 'logo.png' });
   }
 } catch (e) { console.warn('[migrate] legacy data copy skipped:', e.message); }
 
@@ -98,6 +103,7 @@ function startPython(onReady) {
       ...process.env,
       ICT_DATA_DIR:            DATA_DIR,
       ICT_BUNDLE_DIR:          SRC_DIR,
+      ICT_API_TOKEN:           API_TOKEN,
       PYTHONUNBUFFERED:        '1',
       PYTHONDONTWRITEBYTECODE: '1',
     },
@@ -129,7 +135,7 @@ ipcMain.handle('py-call', (_e, method, args) => new Promise(resolve => {
   const req = http.request({
     hostname: '127.0.0.1', port: serverPort,
     path: `/api/${encodeURIComponent(method)}`, method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body), 'X-ICT-Token': API_TOKEN },
   }, res => {
     let raw = '';
     res.on('data', c => raw += c);
@@ -139,9 +145,13 @@ ipcMain.handle('py-call', (_e, method, args) => new Promise(resolve => {
   req.write(body); req.end();
 }));
 
-ipcMain.handle('open-file', (_e, filePath) =>
-  shell.openPath(filePath).then(() => ({ ok: true })).catch(e => ({ ok: false, error: e.message }))
-);
+ipcMain.handle('open-file', (_e, filePath) => {
+  // Only files inside the app's own data folder may be opened.
+  const target = path.resolve(String(filePath || ''));
+  const root   = path.resolve(DATA_DIR) + path.sep;
+  if (!target.startsWith(root)) return { ok: false, error: 'Path not allowed' };
+  return shell.openPath(target).then(() => ({ ok: true })).catch(e => ({ ok: false, error: e.message }));
+});
 
 ipcMain.on('refocus-window', () => {
   if (!mainWindow) return;
@@ -169,9 +179,16 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
     },
   });
   mainWindow.setMenuBarVisibility(false);
+  // The app never opens new windows or navigates away from its own local server.
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  mainWindow.webContents.on('will-navigate', (e, url) => {
+    if (!url.startsWith('http://127.0.0.1:')) e.preventDefault();
+  });
   mainWindow.on('ready-to-show', () => mainWindow.show());
   mainWindow.on('closed', () => { mainWindow = null; killPython(); });
 
