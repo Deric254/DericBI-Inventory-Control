@@ -1,18 +1,15 @@
 """
-DericBI Inventory Control v2.0
-Local browser app + HTML UI + Excel as live database
-Enhancements: Custom departments/types, item transfers, repairs, replacements,
-              classified role access, auto-audit logging, portable app builder
+DericBI Inventory Control v3
+Local app: HTML UI + Python backend + SQLite (ACID) storage.
+Excel is supported for one-time import of older data and for "Export to Excel".
 """
 import os as _os
 _os.environ.setdefault("PYWEBVIEW_GUI", "edgechromium")
 _os.environ.setdefault("WEBKIT_DISABLE_COMPOSITING_MODE", "1")
 _os.environ.setdefault("PYWEBVIEW_NO_UIAUTOMATION", "1")
 
-import json, os, sys, datetime, shutil, openpyxl, threading, re, hashlib, secrets, hmac, time, zipfile
+import json, os, sys, datetime, shutil, threading, re, hashlib, secrets, hmac, time, zipfile
 import http.server, socketserver, webbrowser, urllib.parse
-from openpyxl.styles import Font, PatternFill, Alignment
-from openpyxl.utils import get_column_letter
 
 # ── Portable EXE / Electron path resolution ───────────────────────────────────
 # Three launch modes:
@@ -47,30 +44,16 @@ def _seed_file(name):
         if os.path.exists(src):
             shutil.copy2(src, dst)
 
-for _f in ("ICT_MASTER.xlsx", "auth.json", "logo.png"):
+for _f in ("auth.json", "logo.png"):
     _seed_file(_f)
 
-MASTER_XL  = os.path.join(BASE_DIR, "ICT_MASTER.xlsx")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from storage import (Storage, StorageError, INV_COLS, INK_CODES, INK_NAMES, INK_DEFAULTS,
+                     SHEET_INV, SHEET_HISTORY, SHEET_REPLACE, SHEET_INK, SHEET_LOG)
+
 BACKUP_DIR = os.path.join(BASE_DIR, "backups")
 AUTH_FILE  = os.path.join(BASE_DIR, "auth.json")
 CONFIG_FILE= os.path.join(BASE_DIR, "config.json")
-
-SHEET_INV     = "Inventory"
-SHEET_HISTORY = "History"
-SHEET_REPLACE = "Replacements"
-SHEET_INK     = "Ink"
-SHEET_LOG     = "Audit Log"
-SHEET_CONFIG  = "Config"
-ALL_SHEETS    = [SHEET_INV, SHEET_HISTORY, SHEET_REPLACE, SHEET_INK, SHEET_LOG, SHEET_CONFIG]
-
-INV_COLS = [
-    "Date Collected","Purchase Date","Equipment Type","Brand/Model","Serial No.",
-    "Assigned To","Department/Location","Condition/Status","OS/Firmware",
-    "IP Address","MAC Address","CPU","RAM","Disk","Remarks","Transfer History"
-]
-INK_CODES    = ["BK","C","LC","M","LM","Y"]
-INK_NAMES    = {"BK":"Black","C":"Cyan","LC":"Light Cyan","M":"Magenta","LM":"Light Magenta","Y":"Yellow"}
-INK_DEFAULTS = {"BK":9,"C":3,"LC":5,"M":1,"LM":5,"Y":11}
 
 # Default lists — users can extend these
 DEFAULT_DEPTS = [
@@ -90,27 +73,10 @@ def today(): return datetime.date.today().strftime("%Y-%m-%d")
 def now():   return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 # ── Integrity helpers ─────────────────────────────────────────────────────────
-MAX_CELL_CHARS = 32000          # Excel hard limit is 32,767 per cell
-
-def _fsync_path(path):
-    with open(path, "r+b") as f:
-        f.flush(); os.fsync(f.fileno())
-
-_DB_GEN = 0   # bumped on every database write; part of the read-cache key
-
-def _atomic_save(wb, path):
-    """Write the workbook to a temp file, flush it to disk, then swap it in with
-    one atomic rename. A crash or power cut can never leave a half-written database."""
-    global _DB_GEN
-    tmp = path + ".tmp"
-    wb.save(tmp)
-    _fsync_path(tmp)
-    os.replace(tmp, path)
-    _DB_GEN += 1
+MAX_CELL_CHARS = 32000
 
 def _atomic_write_bytes(path, data):
-    global _DB_GEN
-    _DB_GEN += 1
+    """Crash-safe small-file write: temp file, flush to disk, atomic rename."""
     tmp = path + ".tmp"
     with open(tmp, "wb") as f:
         f.write(data); f.flush(); os.fsync(f.fileno())
@@ -118,14 +84,6 @@ def _atomic_write_bytes(path, data):
 
 def _atomic_write_json(path, obj, **kw):
     _atomic_write_bytes(path, json.dumps(obj, **kw).encode("utf-8"))
-
-def _textify_row(ws, row):
-    """openpyxl turns any string starting with '=' into a live formula. User-typed
-    text must stay text (prevents formula injection when the file is opened in Excel)."""
-    for cell in ws[row]:
-        v = cell.value
-        if isinstance(v, str) and v[:1] == "=":
-            cell.data_type = "s"
 
 def _check_fields(data):
     if not isinstance(data, dict):
@@ -185,465 +143,10 @@ class ConfigEngine:
             return False
 
 # ════════════════════════════════════════════
-# EXCEL ENGINE
-# ════════════════════════════════════════════
-class ExcelEngine:
-    def __init__(self):
-        self._lock = threading.Lock()
-        try:
-            if os.path.exists(MASTER_XL + ".tmp"): os.remove(MASTER_XL + ".tmp")   # leftover from an interrupted save
-        except OSError: pass
-        self._ensure_workbook()
-
-    @staticmethod
-    def _valid_row(ws, row_num):
-        if not isinstance(row_num, int) or row_num < 2 or row_num > ws.max_row:
-            raise ValueError(f"Row {row_num} no longer exists — refresh and try again")
-
-    def _init_headers(self, ws, name):
-        hdrs = {
-            SHEET_INV:     INV_COLS,
-            SHEET_HISTORY: ["Date","Asset","Serial No.","From Department","To Department","Event","Description","By"],
-            SHEET_REPLACE: ["Date Replaced","Old Asset","Old Serial","Department","Replaced With","New Serial","New Condition","Note","By"],
-            SHEET_INK:     ["Timestamp","Colour Code","Colour Name","Action","Quantity","Big ICT","Small ICT","Note"],
-            SHEET_LOG:     ["Timestamp","Action","Description","By"],
-            SHEET_CONFIG:  ["Key","Value"],
-        }
-        ws.append(hdrs.get(name, []))
-        for cell in ws[1]:
-            cell.font      = Font(bold=True, color="FFFFFF", size=11)
-            cell.fill      = PatternFill("solid", fgColor="1F2937")
-            cell.alignment = Alignment(horizontal="center", vertical="center")
-        ws.row_dimensions[1].height = 22
-
-    def _set_widths(self, ws):
-        widths = {
-            "Date Collected":13,"Purchase Date":13,"Equipment Type":22,"Brand/Model":20,
-            "Serial No.":22,"Assigned To":20,"Department/Location":24,"Condition/Status":22,
-            "OS/Firmware":16,"IP Address":16,"MAC Address":18,"CPU":14,"RAM":12,"Disk":20,
-            "Remarks":32,"Transfer History":40
-        }
-        if ws.max_row < 1: return
-        h = [str(ws.cell(1, c).value) for c in range(1, ws.max_column + 1)]
-        for i, col_name in enumerate(h, 1):
-            ws.column_dimensions[get_column_letter(i)].width = widths.get(col_name, 16)
-
-    def _write_log(self, wb, action, desc, by="ICT Manager"):
-        # Sanitise strings to avoid charmap codec errors on Windows
-        def _safe(s): return str(s).encode("utf-8","replace").decode("utf-8") if s else ""
-        wb[SHEET_LOG].append([now(), action, _safe(desc), _safe(by)])
-        _textify_row(wb[SHEET_LOG], wb[SHEET_LOG].max_row)
-
-    def _backup(self):
-        try:
-            os.makedirs(BACKUP_DIR, exist_ok=True)
-            ts  = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            dst = os.path.join(BACKUP_DIR, f"ICT_backup_{ts}.xlsx")
-            shutil.copy2(MASTER_XL, dst)
-            # Keep only the 5 most recent backups
-            backups = sorted([
-                os.path.join(BACKUP_DIR, f) for f in os.listdir(BACKUP_DIR)
-                if f.startswith("ICT_backup_") and f.endswith(".xlsx")
-            ])
-            for old in backups[:-5]:
-                try: os.remove(old)
-                except: pass
-            # One long-term snapshot per day, kept 30 days (so a mistake noticed
-            # a week later is still recoverable). Lives in backups/daily/.
-            daily_dir = os.path.join(BACKUP_DIR, "daily")
-            os.makedirs(daily_dir, exist_ok=True)
-            daily = os.path.join(daily_dir, f"ICT_daily_{datetime.date.today():%Y%m%d}.xlsx")
-            if not os.path.exists(daily):
-                shutil.copy2(MASTER_XL, daily)
-            for old in sorted(f for f in os.listdir(daily_dir) if f.endswith(".xlsx"))[:-30]:
-                try: os.remove(os.path.join(daily_dir, old))
-                except: pass
-        except Exception:
-            pass  # Never let a backup failure block the actual write
-
-    def _ensure_workbook(self):
-        if not os.path.exists(MASTER_XL):
-            self._create_fresh()
-            return
-        wb = openpyxl.load_workbook(MASTER_XL)
-        OLD_DATA_SHEETS = ["work sheet","Work Sheet","worksheet","WorkSheet"]
-        old_data_sheet  = next((s for s in OLD_DATA_SHEETS if s in wb.sheetnames), None)
-        needs_migration = SHEET_INV not in wb.sheetnames and old_data_sheet is not None
-        if needs_migration:
-            os.makedirs(BACKUP_DIR, exist_ok=True)
-            shutil.copy2(MASTER_XL, os.path.join(BACKUP_DIR, "ICT_original_before_migration.xlsx"))
-            old_rows = self._read_old_rows(wb, old_data_sheet)
-            for sname in list(wb.sheetnames):
-                del wb[sname]
-            for sheet in ALL_SHEETS:
-                ws = wb.create_sheet(sheet)
-                self._init_headers(ws, sheet)
-            ws_inv = wb[SHEET_INV]
-            for row in old_rows:
-                # pad to new column count
-                while len(row) < len(INV_COLS):
-                    row.append('')
-                ws_inv.append(row)
-            self._set_widths(ws_inv)
-            _atomic_save(wb, MASTER_XL); wb.close()
-            return
-        changed = False
-        for sheet in ALL_SHEETS:
-            if sheet not in wb.sheetnames:
-                ws = wb.create_sheet(sheet)
-                self._init_headers(ws, sheet)
-                changed = True
-        # Add Transfer History column if missing
-        if SHEET_INV in wb.sheetnames:
-            ws = wb[SHEET_INV]
-            if ws.max_row >= 1:
-                h = [str(c.value).strip() if c.value else '' for c in ws[1]]
-                if "Transfer History" not in h:
-                    col = len(h) + 1
-                    ws.cell(1, col).value = "Transfer History"
-                    ws.cell(1, col).font  = Font(bold=True, color="FFFFFF", size=11)
-                    ws.cell(1, col).fill  = PatternFill("solid", fgColor="1F2937")
-                    changed = True
-        if changed:
-            _atomic_save(wb, MASTER_XL)
-        wb.close()
-
-    def _read_old_rows(self, wb, sheet_name):
-        ws   = wb[sheet_name]
-        rows = list(ws.values)
-        if not rows: return []
-        old_h = [str(c).strip() if c else '' for c in rows[0]]
-        def g(row, name, default=''):
-            try:
-                i = old_h.index(name)
-                v = row[i] if i < len(row) else None
-                if v is None: return default
-                if isinstance(v, (datetime.date, datetime.datetime)):
-                    return v.strftime('%Y-%m-%d')
-                s = str(v).strip()
-                if re.match(r'\d{4}-\d{2}-\d{2}[ T]', s): s = s[:10]
-                return default if s.lower() in ['nan','none','nat','<na>'] else s
-            except ValueError: return default
-        def fix_ip(ip): return (ip or '').replace('192.068.','192.168.').replace('192.0.168.','192.168.')
-        result = []
-        for row in rows[1:]:
-            if not any(v for v in row): continue
-            ram  = ' '.join(p for p in [g(row,'RAM Size'),g(row,'RAM Type')] if p)
-            disk = ' '.join(p for p in [g(row,'Disk Size'),g(row,'Disk Type'),g(row,'Disk Health')] if p)
-            result.append([
-                g(row,'Date Collected'), g(row,'Purchase Date'), g(row,'Equipment Type'),
-                g(row,'Brand/Model'), g(row,'Serial No.'), g(row,'Assigned To'),
-                g(row,'Department/Location').strip(), g(row,'Condition/Status') or 'Good',
-                g(row,'OS/Firmware'), fix_ip(g(row,'IP Address')), g(row,'MAC Address'),
-                g(row,'CPU'), ram, disk, g(row,'Remarks'), ''
-            ])
-        return result
-
-    def _create_fresh(self):
-        wb = openpyxl.Workbook()
-        wb.remove(wb.active)
-        for s in ALL_SHEETS:
-            self._init_headers(wb.create_sheet(s), s)
-        _atomic_save(wb, MASTER_XL)
-
-    def _clean(self, v):
-        if v is None: return ''
-        if isinstance(v, (datetime.date, datetime.datetime)): return v.strftime('%Y-%m-%d')
-        s = str(v).strip()
-        if re.match(r'\d{4}-\d{2}-\d{2}[ T]', s): s = s[:10]
-        return '' if s.lower() in ['nan','none','nat','<na>'] else s
-
-    # ── READ ─────────────────────────────────
-    def load_all(self):
-        with self._lock:
-            wb   = openpyxl.load_workbook(MASTER_XL, data_only=True, read_only=True)
-            inv  = self._read_inv(wb)
-            ink  = self._read_ink(wb)
-            log  = self._read_log(wb)
-            hist = self._read_hist(wb)
-            wb.close()
-            return {"inventory": inv, "ink": ink, "log": log, "history": hist}
-
-    def load_all_json(self):
-        """JSON for the UI, cached until the database file changes (our own writes,
-        a restore, or someone editing the workbook in Excel all invalidate it)."""
-        with self._lock:
-            st  = os.stat(MASTER_XL)
-            key = (st.st_mtime_ns, st.st_size, _DB_GEN)
-            c   = getattr(self, "_jcache", None)
-            if c and c[0] == key:
-                return c[1]
-        txt = json.dumps(self.load_all())
-        # Store under the key captured BEFORE reading: if a write slipped in meanwhile
-        # the key no longer matches and the next call simply re-reads (never stale).
-        self._jcache = (key, txt)
-        return txt
-
-    def log_session(self, action, desc, by="ICT Manager"):
-        """Write a standalone audit log entry without touching other sheets."""
-        with self._lock:
-            wb = openpyxl.load_workbook(MASTER_XL)
-            self._write_log(wb, action, desc, by)
-            _atomic_save(wb, MASTER_XL); wb.close()
-
-    def _read_inv(self, wb):
-        ws   = wb[SHEET_INV]
-        rows = list(ws.values)
-        if len(rows) < 2: return []
-        h   = [str(c).strip() if c else '' for c in rows[0]]
-        out = []
-        for i, row in enumerate(rows[1:], start=2):
-            d = {'_row': i}
-            for j, col in enumerate(h):
-                d[col] = self._clean(row[j] if j < len(row) else None)
-            out.append(d)
-        return out
-
-    def _read_ink(self, wb):
-        ws    = wb[SHEET_INK]
-        rows  = list(ws.values)
-        # state: store = storeroom qty, ictRoom = ICT room qty (deployed from store)
-        state = {k: {"store": INK_DEFAULTS[k], "ictRoom": 0} for k in INK_CODES}
-        for row in rows[1:]:
-            if not row or not row[1]: continue
-            code   = str(row[1]).strip()
-            action = str(row[3]).strip() if len(row)>3 and row[3] else ''
-            try: qty = int(float(str(row[4]))) if len(row)>4 and row[4] else 0
-            except: qty = 0
-            # bigIct column now stores ictRoom qty snapshot (written on move_to_ict/use)
-            try: ict_snap = int(float(str(row[5]))) if len(row)>5 and row[5] not in (None,'','None') else None
-            except: ict_snap = None
-            if code in state:
-                if action == 'restock':
-                    state[code]['store'] += qty
-                elif action == 'move_to_ict':
-                    # Move from store to ICT room
-                    state[code]['store']   = max(0, state[code]['store'] - qty)
-                    state[code]['ictRoom'] += qty
-                elif action == 'use':
-                    # Use from ICT room first, then store
-                    from_ict = min(qty, state[code]['ictRoom'])
-                    remaining = qty - from_ict
-                    state[code]['ictRoom'] = max(0, state[code]['ictRoom'] - from_ict)
-                    state[code]['store']   = max(0, state[code]['store'] - remaining)
-                elif action == 'set_printer':
-                    pass
-                # If a snapshot of ictRoom was recorded, trust it (keeps state consistent)
-                if ict_snap is not None and action in ('move_to_ict','use','set_printer'):
-                    state[code]['ictRoom'] = ict_snap
-        return state
-
-    def _read_log(self, wb):
-        ws  = wb[SHEET_LOG]
-        out = []
-        for row in list(ws.values)[1:]:
-            out.append({'time':str(row[0]) if row[0] else '','action':str(row[1]) if len(row)>1 and row[1] else '','desc':str(row[2]) if len(row)>2 and row[2] else ''})
-        return list(reversed(out))
-
-    def _read_hist(self, wb):
-        ws  = wb[SHEET_HISTORY]
-        out = []
-        for row in list(ws.values)[1:]:
-            out.append({
-                'date':  str(row[0]) if row[0] else '',
-                'asset': str(row[1]) if len(row)>1 and row[1] else '',
-                'serial':str(row[2]) if len(row)>2 and row[2] else '',
-                'from':  str(row[3]) if len(row)>3 and row[3] else '',
-                'to':    str(row[4]) if len(row)>4 and row[4] else '',
-                'event': str(row[5]) if len(row)>5 and row[5] else '',
-                'note':  str(row[6]) if len(row)>6 and row[6] else '',
-                'by':    str(row[7]) if len(row)>7 and row[7] else '',
-            })
-        return list(reversed(out))
-
-    # ── WRITE ────────────────────────────────
-    def add_asset(self, data):
-        with self._lock:
-            self._backup()
-            wb = openpyxl.load_workbook(MASTER_XL)
-            ws = wb[SHEET_INV]
-            row_data = [data.get(c, '') for c in INV_COLS]
-            ws.append(row_data)
-            new_row = ws.max_row
-            _textify_row(ws, new_row)
-            self._set_widths(ws)
-            self._write_log(wb, 'ADD', f"Added: {data.get('Equipment Type','')} — {data.get('Brand/Model','')} | {data.get('Department/Location','')}")
-            _atomic_save(wb, MASTER_XL); wb.close()
-            return new_row
-
-    def update_asset(self, row_num, data):
-        with self._lock:
-            self._backup()
-            wb = openpyxl.load_workbook(MASTER_XL)
-            ws = wb[SHEET_INV]
-            self._valid_row(ws, row_num)
-            h  = [ws.cell(1,c).value for c in range(1,len(INV_COLS)+2)]
-            for j, col in enumerate(h, 1):
-                if col in data:
-                    ws.cell(row=row_num, column=j).value = data[col]
-            _textify_row(ws, row_num)
-            self._write_log(wb, 'EDIT', f"Edited row {row_num}: {data.get('Equipment Type','')} — {data.get('Brand/Model','')}")
-            _atomic_save(wb, MASTER_XL); wb.close()
-
-    def delete_asset(self, row_num, desc):
-        with self._lock:
-            self._backup()
-            wb = openpyxl.load_workbook(MASTER_XL)
-            self._valid_row(wb[SHEET_INV], row_num)
-            wb[SHEET_INV].delete_rows(row_num)
-            self._write_log(wb, 'DELETE', f"Deleted: {desc}")
-            _atomic_save(wb, MASTER_XL); wb.close()
-
-    def transfer_asset(self, row_num, asset_desc, serial, from_dept, to_dept, note, date, by='ICT Manager'):
-        """Transfer an asset to another department — updates Inventory + logs history."""
-        with self._lock:
-            self._backup()
-            wb     = openpyxl.load_workbook(MASTER_XL)
-            ws_inv = wb[SHEET_INV]
-            self._valid_row(ws_inv, row_num)
-            h      = [ws_inv.cell(1,c).value for c in range(1, ws_inv.max_column+1)]
-            def col_idx(name):
-                try: return h.index(name)+1
-                except: return None
-            dept_col = col_idx("Department/Location")
-            xfer_col = col_idx("Transfer History")
-            if dept_col:
-                ws_inv.cell(row=row_num, column=dept_col).value = to_dept
-            if xfer_col:
-                old_xfer = ws_inv.cell(row=row_num, column=xfer_col).value or ''
-                entry = f"[{date}] {from_dept} → {to_dept}"
-                if note: entry += f": {note}"
-                ws_inv.cell(row=row_num, column=xfer_col).value = (str(old_xfer) + " | " + entry).strip(" |")
-            # History
-            by_val = by if by and by.strip() else "ICT Manager"
-            wb[SHEET_HISTORY].append([date, asset_desc, serial, from_dept, to_dept, "transferred",
-                f"Transferred from {from_dept} to {to_dept}. Note: {note}", by_val])
-            _textify_row(ws_inv, row_num); _textify_row(wb[SHEET_HISTORY], wb[SHEET_HISTORY].max_row)
-            self._write_log(wb, 'TRANSFER', f"Transferred {asset_desc} (S/N:{serial}) from {from_dept} → {to_dept}")
-            _atomic_save(wb, MASTER_XL); wb.close()
-
-    def record_replacement(self, old_row, old_desc, rep):
-        with self._lock:
-            self._backup()
-            wb     = openpyxl.load_workbook(MASTER_XL)
-            ws_inv = wb[SHEET_INV]
-            self._valid_row(ws_inv, old_row)
-            h      = [ws_inv.cell(1,c).value for c in range(1, len(INV_COLS)+2)]
-            def col_idx(name):
-                try: return h.index(name)+1
-                except: return None
-            ci = col_idx("Condition/Status"); ri = col_idx("Remarks")
-            if ci: ws_inv.cell(row=old_row, column=ci).value = "Replaced"
-            if ri:
-                old_rem = ws_inv.cell(row=old_row, column=ri).value or ''
-                ws_inv.cell(row=old_row, column=ri).value = (str(old_rem)+f" | REPLACED {rep['date']}: {rep['note']}").strip(" |")
-            ws_inv.append([{
-                "Date Collected":rep['date'],"Purchase Date":rep['date'],
-                "Equipment Type":rep.get('newType',''),"Brand/Model":rep.get('newBrand',''),
-                "Serial No.":rep.get('newSerial',''),"Assigned To":rep.get('assigned',''),
-                "Department/Location":rep.get('dept',''),"Condition/Status":rep.get('newCond','New'),
-                "OS/Firmware":"","IP Address":rep.get('ip',''),"MAC Address":"","CPU":"","RAM":"","Disk":"",
-                "Remarks":f"Replaced: {old_desc} on {rep['date']}. {rep['note']}","Transfer History":""
-            }.get(c,'') for c in INV_COLS])
-            self._set_widths(ws_inv)
-            wb[SHEET_REPLACE].append([rep['date'],old_desc,rep.get('oldSerial',''),rep.get('dept',''),
-                f"{rep.get('newType','')} {rep.get('newBrand','')}".strip(),rep.get('newSerial',''),
-                rep.get('newCond','New'),rep['note'],"ICT Manager"])
-            wb[SHEET_HISTORY].append([rep['date'],old_desc,rep.get('oldSerial',''),rep.get('dept',''),
-                rep.get('dept',''),"replaced",
-                f"Replaced with: {rep.get('newType','')} {rep.get('newBrand','')} S/N:{rep.get('newSerial','')}. Note: {rep['note']}","ICT Manager"])
-            _textify_row(ws_inv, old_row); _textify_row(ws_inv, ws_inv.max_row)
-            _textify_row(wb[SHEET_REPLACE], wb[SHEET_REPLACE].max_row); _textify_row(wb[SHEET_HISTORY], wb[SHEET_HISTORY].max_row)
-            self._write_log(wb,'REPLACE',f"Replaced {old_desc} → {rep.get('newBrand','')} on {rep['date']}")
-            _atomic_save(wb, MASTER_XL); wb.close()
-
-    def write_history_event(self, asset_desc, serial, dept, event, note, date, cost='', by='ICT Manager'):
-        with self._lock:
-            wb = openpyxl.load_workbook(MASTER_XL)
-            by_val = by if by and by.strip() else "ICT Manager"
-            wb[SHEET_HISTORY].append([date, asset_desc, serial, dept, dept, event, note, by_val])
-
-            # For events that change asset state, update the Inventory row too
-            STATUS_CHANGE_EVENTS = {'repaired', 'disposed', 'replaced', 'upgraded'}
-            if event in STATUS_CHANGE_EVENTS or event == 'reassigned':
-                ws = wb[SHEET_INV]
-                h  = [ws.cell(1,c).value for c in range(1, ws.max_column+1)]
-                def col_idx(name):
-                    try: return h.index(name)+1
-                    except ValueError: return None
-                ser_col   = col_idx("Serial No.")
-                cond_col  = col_idx("Condition/Status")
-                assign_col= col_idx("Assigned To")
-                dept_col  = col_idx("Department/Location")
-
-                if ser_col:
-                    for row in range(2, ws.max_row+1):
-                        if str(ws.cell(row, ser_col).value or '').strip() == serial.strip():
-                            cur_cond = str(ws.cell(row, cond_col).value or '') if cond_col else ''
-                            if event == 'repaired' and cond_col:
-                                if 'Repair' in cur_cond or cur_cond in ('Fair (Needs Repair)', 'Needs Repair'):
-                                    ws.cell(row, cond_col).value = 'Good'
-                            elif event == 'disposed' and cond_col:
-                                ws.cell(row, cond_col).value = 'Disposed'
-                            elif event == 'replaced' and cond_col:
-                                ws.cell(row, cond_col).value = 'Replaced'
-                            elif event == 'upgraded' and cond_col:
-                                # Mark as Good after upgrade
-                                ws.cell(row, cond_col).value = 'Good'
-                            elif event == 'reassigned':
-                                # Extract new assignee from note if present e.g. "Reassigned to John"
-                                import re as _re
-                                m = _re.search(r'(?:to|→)\s*(.+?)(?:\s*\[|$)', note, _re.IGNORECASE)
-                                if m and assign_col:
-                                    ws.cell(row, assign_col).value = m.group(1).strip()
-                            break
-
-            _textify_row(wb[SHEET_HISTORY], wb[SHEET_HISTORY].max_row)
-            self._write_log(wb, event.upper(), f"{event} on {asset_desc}: {note[:80]}")
-            _atomic_save(wb, MASTER_XL); wb.close()
-
-    def write_ink(self, code, action, qty, ict_room_after, note=''):
-        with self._lock:
-            wb = openpyxl.load_workbook(MASTER_XL)
-            # Columns: Timestamp, Code, Name, Action, Qty, ICT Room (snapshot), _, Note
-            wb[SHEET_INK].append([now(), code, INK_NAMES.get(code,code), action, qty, ict_room_after, 0, note])
-            _textify_row(wb[SHEET_INK], wb[SHEET_INK].max_row)
-            if action == 'restock':
-                self._write_log(wb, 'INK', f"Ink restocked to store: {qty}x {INK_NAMES.get(code,code)} ({code})")
-            elif action == 'move_to_ict':
-                self._write_log(wb, 'INK', f"Ink moved Store→ICT Room: {qty}x {INK_NAMES.get(code,code)} ({code})")
-            elif action == 'use':
-                self._write_log(wb, 'INK', f"Ink used: {qty}x {INK_NAMES.get(code,code)} ({code})")
-            else:
-                self._write_log(wb, 'INK', f"Ink {action}: {qty}x {INK_NAMES.get(code,code)} ({code})")
-            _atomic_save(wb, MASTER_XL); wb.close()
-
-    def get_transfer_log(self):
-        """Return all transfer history entries."""
-        with self._lock:
-            wb  = openpyxl.load_workbook(MASTER_XL, data_only=True, read_only=True)
-            ws  = wb[SHEET_HISTORY]
-            out = []
-            for row in list(ws.values)[1:]:
-                if len(row) > 5 and str(row[5] if row[5] else '').strip() == 'transferred':
-                    out.append({
-                        'date':   str(row[0]) if row[0] else '',
-                        'asset':  str(row[1]) if len(row)>1 and row[1] else '',
-                        'serial': str(row[2]) if len(row)>2 and row[2] else '',
-                        'from':   str(row[3]) if len(row)>3 and row[3] else '',
-                        'to':     str(row[4]) if len(row)>4 and row[4] else '',
-                        'note':   str(row[6]) if len(row)>6 and row[6] else '',
-                        'by':     str(row[7]) if len(row)>7 and row[7] else '',
-                    })
-            wb.close()
-            return list(reversed(out))
-
-
-# ════════════════════════════════════════════
 # JS API BRIDGE
 # ════════════════════════════════════════════
 class Api:
-    def __init__(self, engine: ExcelEngine, cfg: ConfigEngine):
+    def __init__(self, engine, cfg: ConfigEngine):
         self.engine = engine
         self.cfg    = cfg
         self.window = None
@@ -767,18 +270,7 @@ class Api:
 
     def ink_action(self, code, action, qty, ict_room_after=0, note=''):
         try:
-            qty = int(qty) if qty else 0
-            ict_room_after = int(ict_room_after) if ict_room_after else 0
-            if action == 'use':
-                state = self.engine.load_all()['ink'].get(code, {})
-                total_avail = state.get('ictRoom', 0) + state.get('store', 0)
-                if total_avail < qty:
-                    return json.dumps({"ok": False, "error": f"Only {total_avail} available (ICT Room + Store)"})
-            elif action == 'move_to_ict':
-                state = self.engine.load_all()['ink'].get(code, {})
-                if state.get('store', 0) < qty:
-                    return json.dumps({"ok": False, "error": f"Only {state.get('store',0)} in store"})
-            self.engine.write_ink(code, action, qty, ict_room_after, note)
+            self.engine.ink_apply(code, action, qty, ict_room_after, note)   # validate + record in ONE transaction
             return json.dumps({"ok": True})
         except Exception as e:
             return json.dumps({"ok": False, "error": str(e)})
@@ -830,53 +322,30 @@ class Api:
 
     def get_backups(self):
         try:
-            if not os.path.exists(BACKUP_DIR):
-                return json.dumps({"ok": True, "backups": []})
-            files = sorted([
-                f for f in os.listdir(BACKUP_DIR)
-                if f.endswith('.xlsx')
-            ], reverse=True)
-            result = []
-            for f in files:
-                fp = os.path.join(BACKUP_DIR, f)
-                size_kb = round(os.path.getsize(fp) / 1024, 1)
-                mtime = datetime.datetime.fromtimestamp(os.path.getmtime(fp))
-                result.append({
-                    "name": f,
-                    "size_kb": size_kb,
-                    "modified": mtime.strftime("%Y-%m-%d %H:%M:%S")
-                })
-            return json.dumps({"ok": True, "backups": result})
+            return json.dumps({"ok": True, "backups": self.engine.list_backups()})
         except Exception as e:
             return json.dumps({"ok": False, "error": str(e)})
 
     def export_full_backup(self):
         """Package ALL system data into one zip for full portability."""
         try:
-            import zipfile, base64, io
+            import zipfile, base64, io, tempfile
             ts  = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             buf = io.BytesIO()
-            with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
-                # Core data files
-                for fname, fpath in [
-                    ("ICT_MASTER.xlsx", MASTER_XL),
-                    ("auth.json",       AUTH_FILE),
-                    ("config.json",     CONFIG_FILE),
-                ]:
+            with tempfile.TemporaryDirectory() as td, zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+                dbp = os.path.join(td, "inventory.db");   self.engine.snapshot_to(dbp)       # consistent copy, even while in use
+                xlp = os.path.join(td, "ICT_MASTER.xlsx"); self.engine.export_xlsx(xlp)     # readable copy / downgrade path
+                zf.write(dbp, "inventory.db")
+                zf.write(xlp, "ICT_MASTER.xlsx")
+                for fname, fpath in [("auth.json", AUTH_FILE), ("config.json", CONFIG_FILE)]:
                     if os.path.exists(fpath):
                         zf.write(fpath, fname)
-                # All backup files
                 if os.path.exists(BACKUP_DIR):
                     for f in os.listdir(BACKUP_DIR):
-                        if f.endswith('.xlsx'):
+                        if f.endswith(('.db', '.xlsx')) and os.path.isfile(os.path.join(BACKUP_DIR, f)):
                             zf.write(os.path.join(BACKUP_DIR, f), f"backups/{f}")
-                # Manifest so we can validate on restore
-                manifest = {
-                    "version": 1,
-                    "exported": ts,
-                    "app": "DericBI Inventory Control",
-                    "tagline": "Cut Through Noise"
-                }
+                manifest = {"version": 2, "format": "sqlite", "exported": ts,
+                            "app": "DericBI Inventory Control", "tagline": "Cut Through Noise"}
                 zf.writestr("ICT_MANIFEST.json", json.dumps(manifest, indent=2))
             b64 = base64.b64encode(buf.getvalue()).decode('ascii')
             return json.dumps({"ok": True, "b64": b64, "filename": f"ICT_FullBackup_{ts}.zip"})
@@ -884,72 +353,61 @@ class Api:
             return json.dumps({"ok": False, "error": str(e)})
 
     def restore_full_backup(self, b64_zip):
-        """Restore all system data from a full backup zip."""
+        """Restore all system data from a full backup zip (all-or-nothing)."""
         try:
-            import zipfile, base64, io
+            import zipfile, base64, io, tempfile
             raw = base64.b64decode(b64_zip)
             buf = io.BytesIO(raw)
             if not zipfile.is_zipfile(buf):
-                return json.dumps({"ok": False, "error": "Invalid file — not a zip archive"})
+                return json.dumps({"ok": False, "error": "Invalid file - not a zip archive"})
             buf.seek(0)
             with zipfile.ZipFile(buf, 'r') as zf:
                 names = zf.namelist()
-                # Validate manifest
                 if "ICT_MANIFEST.json" not in names:
-                    return json.dumps({"ok": False, "error": "Invalid backup — missing manifest. Only backups exported from this system are accepted."})
-                manifest = json.loads(zf.read("ICT_MANIFEST.json"))
+                    return json.dumps({"ok": False, "error": "This is not a DericBI Inventory Control backup."})
+                try:
+                    manifest = json.loads(zf.read("ICT_MANIFEST.json").decode("utf-8"))
+                except Exception:
+                    return json.dumps({"ok": False, "error": "The backup manifest is damaged - nothing was changed."})
                 if manifest.get("app") not in ("DericBI Inventory Control", "ICT Command Centre"):
                     return json.dumps({"ok": False, "error": "This backup is not from DericBI Inventory Control."})
-                # Must contain the master data file
-                if "ICT_MASTER.xlsx" not in names:
-                    return json.dumps({"ok": False, "error": "Backup is missing ICT_MASTER.xlsx — cannot restore."})
-                # Refuse oversized / malicious archives (zip bombs)
-                if sum(i.file_size for i in zf.infolist()) > 4 * 1024**3:
+                if sum(i.file_size for i in zf.infolist()) > 8 * 1024**3:
                     return json.dumps({"ok": False, "error": "Backup archive is too large to restore safely."})
-                # Validate the database inside the backup BEFORE touching live data
-                import tempfile
+                kind = "db" if "inventory.db" in names else ("xlsx" if "ICT_MASTER.xlsx" in names else None)
+                if kind is None:
+                    return json.dumps({"ok": False, "error": "Backup contains no database - cannot restore."})
                 with tempfile.TemporaryDirectory() as td:
-                    probe = os.path.join(td, "probe.xlsx")
-                    with open(probe, "wb") as f: f.write(zf.read("ICT_MASTER.xlsx"))
+                    p = os.path.join(td, "restore." + kind)
+                    with open(p, "wb") as f: f.write(zf.read("inventory.db" if kind == "db" else "ICT_MASTER.xlsx"))
                     try:
-                        _wb = openpyxl.load_workbook(probe, read_only=True)
-                        missing = [n for n in (SHEET_INV, SHEET_HISTORY, SHEET_INK, SHEET_LOG) if n not in _wb.sheetnames]
-                        _wb.close()
+                        (self.engine.restore_from_db if kind == "db" else self.engine.restore_from_xlsx)(p)
+                    except ValueError as e:
+                        return json.dumps({"ok": False, "error": str(e)})
                     except Exception:
-                        return json.dumps({"ok": False, "error": "The database inside this backup is damaged — nothing was changed."})
-                    if missing:
-                        return json.dumps({"ok": False, "error": "Backup database is missing sheets: " + ", ".join(missing) + " — nothing was changed."})
-                # Restore under the lock so no writes happen concurrently
-                with self.engine._lock:
-                    # Safety net: snapshot the current database first
-                    try:
-                        os.makedirs(os.path.join(BACKUP_DIR, "pre-restore"), exist_ok=True)
-                        shutil.copy2(MASTER_XL, os.path.join(BACKUP_DIR, "pre-restore", f"before_restore_{datetime.datetime.now():%Y%m%d_%H%M%S}.xlsx"))
-                    except Exception: pass
-                    for fname, fpath in [
-                        ("ICT_MASTER.xlsx", MASTER_XL),
-                        ("auth.json",       AUTH_FILE),
-                        ("config.json",     CONFIG_FILE),
-                    ]:
-                        if fname in names:
-                            _atomic_write_bytes(fpath, zf.read(fname))
-                    os.makedirs(BACKUP_DIR, exist_ok=True)
-                    for name in names:
-                        if name.startswith("backups/") and name.endswith(".xlsx"):
-                            fname = os.path.basename(name)
-                            if fname:
-                                _atomic_write_bytes(os.path.join(BACKUP_DIR, fname), zf.read(name))
+                        return json.dumps({"ok": False, "error": "The database inside this backup could not be read - nothing was changed."})
+                # Data restored successfully - now the settings files and older backups
+                for fname, fpath in [("auth.json", AUTH_FILE), ("config.json", CONFIG_FILE)]:
+                    if fname in names:
+                        _atomic_write_bytes(fpath, zf.read(fname))
+                os.makedirs(BACKUP_DIR, exist_ok=True)
+                for name in names:
+                    if name.startswith("backups/") and name.endswith((".db", ".xlsx")):
+                        fname = os.path.basename(name)
+                        if fname and not fname.startswith("."):
+                            _atomic_write_bytes(os.path.join(BACKUP_DIR, fname), zf.read(name))
             return json.dumps({"ok": True})
         except Exception as e:
             return json.dumps({"ok": False, "error": str(e)})
 
     def open_excel(self):
+        """Export an up-to-date Excel copy and open it (the live data lives in the database)."""
         import subprocess
         try:
-            if sys.platform == 'win32':    os.startfile(MASTER_XL)
-            elif sys.platform == 'darwin': subprocess.Popen(['open', MASTER_XL])
-            else:                          subprocess.Popen(['xdg-open', MASTER_XL])
-            return json.dumps({"ok": True})
+            path = self.engine.export_for_user()
+            if sys.platform == 'win32':    os.startfile(path)
+            elif sys.platform == 'darwin': subprocess.Popen(['open', path])
+            else:                          subprocess.Popen(['xdg-open', path])
+            return json.dumps({"ok": True, "path": path})
         except Exception as e:
             return json.dumps({"ok": False, "error": str(e)})
 
@@ -1154,9 +612,9 @@ class Api:
                 "  • Internet connection for first-time package install\n"
                 "  • Packages: openpyxl, reportlab (installed automatically)\n\n"
                 "WHAT TO COPY TO NEW PC:\n"
-                "  main.py          — the application\n"
+                "  main.py, storage.py — the application\n"
                 "  ui.html          — the interface\n"
-                "  ICT_MASTER.xlsx  — your live database (all your data)\n"
+                "  (move your DATA with Security > Export Full Backup, then Restore on the new PC)\n"
                 "  auth.json        — your access PIN (hashed)\n"
                 "  config.json      — your custom departments/types (if exists)\n"
                 "  logo.png         — your logo (if you have one)\n"
@@ -1335,13 +793,13 @@ def make_handler(api, ui_path, browser_mode=False):
             # Serve backup files for download
             if path.startswith("/backups/"):
                 fname = urllib.parse.unquote(path[len("/backups/"):])
-                if fname and "/" not in fname and "\\" not in fname and fname.endswith(".xlsx"):
+                if fname and "/" not in fname and "\\" not in fname and fname.endswith((".xlsx", ".db")):
                     fpath = os.path.join(BACKUP_DIR, fname)
                     if os.path.isfile(fpath):
                         with open(fpath, "rb") as bf:
                             data = bf.read()
                         self.send_response(200)
-                        self.send_header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                        self.send_header("Content-Type", "application/octet-stream" if fname.endswith(".db") else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
                         self.send_header("Content-Length", str(len(data)))
                         self.send_header("Content-Disposition", f'attachment; filename="{fname}"')
                         self.end_headers()
@@ -1434,7 +892,7 @@ def run_desktop(api, ui_path):
 # ════════════════════════════════════════════
 # PROFESSIONAL PDF REPORT ENGINE  (2-page max)
 # ════════════════════════════════════════════
-def generate_pdf_report(engine: "ExcelEngine", output_path: str,
+def generate_pdf_report(engine, output_path: str,
                         dept_filter: str = "", type_filter: str = "",
                         logo_path: str = "", date_from: str = "", date_to: str = "") -> dict:
     """
@@ -1793,9 +1251,19 @@ def generate_pdf_report(engine: "ExcelEngine", output_path: str,
 
 
 def main():
-    engine = ExcelEngine()
-    cfg    = ConfigEngine()
-    api    = Api(engine, cfg)
+    try:
+        seed = next((p for p in (os.path.join(BUNDLE_DIR, "ICT_MASTER.xlsx"),
+                                 os.path.join(BUNDLE_DIR, "..", "assets", "ICT_MASTER.xlsx")) if os.path.exists(p)), None)
+        engine = Storage(BASE_DIR, BACKUP_DIR, seed_xlsx=seed)
+    except Exception as e:
+        msg = str(e)
+        try:
+            with open(os.path.join(BASE_DIR, "startup_error.txt"), "w", encoding="utf-8") as f: f.write(msg)
+        except OSError: pass
+        sys.stderr.write("STARTUP_ERROR: " + msg + "\n"); sys.stderr.flush()
+        sys.exit(2)
+    cfg = ConfigEngine()
+    api = Api(engine, cfg)
 
     ui_path = os.path.join(BUNDLE_DIR, 'ui.html')
     if not os.path.exists(ui_path):

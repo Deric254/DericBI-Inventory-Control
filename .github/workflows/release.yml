@@ -56,6 +56,9 @@ jobs:
           errors = []
           if os.path.exists("assets/auth.json"):
               errors.append("assets/auth.json exists - a PIN must never be shipped; users set their own on first launch.")
+          for f in os.listdir("assets"):
+              if f.lower().endswith((".db", ".sqlite", ".sqlite3", ".db-wal", ".db-shm")):
+                  errors.append(f"assets/{f} is a database file - real data must never be shipped; fresh installs are seeded from ICT_MASTER.xlsx.")
           wb = openpyxl.load_workbook("assets/ICT_MASTER.xlsx", read_only=True)
           for ws in wb.worksheets:
               rows = [r for r in ws.iter_rows(min_row=2, values_only=True) if any(v not in (None, "") for v in r)]
@@ -100,7 +103,7 @@ jobs:
       - name: Verify bundled Python can run the backend's packages
         shell: bash
         run: |
-          ./python/python.exe -c "import openpyxl, reportlab; print('python deps OK', openpyxl.__version__, reportlab.Version)"
+          ./python/python.exe -c "import openpyxl, reportlab, sqlite3; print('python deps OK', openpyxl.__version__, reportlab.Version, 'sqlite', sqlite3.sqlite_version)"
 
       - name: Build installer and upload to a draft release
         shell: bash

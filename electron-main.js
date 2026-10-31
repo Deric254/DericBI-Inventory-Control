@@ -51,8 +51,10 @@ try {
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
-// Seed data files on first run
-['ICT_MASTER.xlsx', 'auth.json', 'logo.png'].forEach(name => {
+// Seed data files on first run. (The sample database is seeded by the Python backend
+// straight from assets/, so it is not copied here - otherwise it would reappear after
+// every launch once the data has moved into inventory.db.)
+['auth.json', 'logo.png'].forEach(name => {
   const dst = path.join(DATA_DIR, name);
   const src = path.join(ASSETS_DIR, name);
   if (!fs.existsSync(dst) && fs.existsSync(src)) fs.copyFileSync(src, dst);
@@ -120,8 +122,20 @@ function startPython(onReady) {
     }
   });
 
-  pyProcess.stderr.on('data', d => process.stderr.write('[py] ' + d));
-  pyProcess.on('close', code => { console.log(`[py] Exited (${code})`); pyProcess = null; });
+  let pyErr = '';
+  pyProcess.stderr.on('data', d => { process.stderr.write('[py] ' + d); pyErr = (pyErr + d.toString()).slice(-4000); });
+  pyProcess.on('close', code => {
+    console.log(`[py] Exited (${code})`);
+    pyProcess = null;
+    // The backend refused to start (e.g. database could not be opened): tell the user why.
+    if (!serverPort && code !== 0 && !app.isQuitting) {
+      const m = pyErr.match(/STARTUP_ERROR: ([^\n]+)/);
+      dialog.showErrorBox('DericBI Inventory Control could not start',
+        (m ? m[1] : 'The data engine stopped unexpectedly.\n\n' + pyErr.split('\n').slice(-6).join('\n')) +
+        '\n\nYour data has not been modified.');
+      app.quit();
+    }
+  });
 }
 
 function killPython() {
@@ -228,7 +242,9 @@ function snapshotBeforeUpdate() {
     const ts   = new Date().toISOString().replace(/[:.]/g, '-');
     const dir  = path.join(root, ts);
     fs.mkdirSync(dir, { recursive: true });
-    ['ICT_MASTER.xlsx', 'auth.json', 'config.json'].forEach(name => {
+    // inventory.db + its -wal/-shm companions are copied together so the snapshot is
+    // complete (SQLite recovers the write-ahead log automatically when it is opened).
+    ['inventory.db', 'inventory.db-wal', 'inventory.db-shm', 'ICT_MASTER.xlsx', 'auth.json', 'config.json'].forEach(name => {
       const src = path.join(DATA_DIR, name);
       if (fs.existsSync(src)) fs.copyFileSync(src, path.join(dir, name));
     });

@@ -840,9 +840,9 @@ tbody tr:hover{background:var(--bg3)}
   </nav>
   <div class="sb-foot">
     <div style="color:var(--text3);font-size:10.5px;margin-bottom:.5rem;display:flex;align-items:center">
-      <span class="sync-dot"></span>Live — Excel Database
+      <span class="sync-dot"></span>Local database · SQLite
     </div>
-    <button class="btn ghost sm" onclick="openExcel()" style="width:100%;justify-content:center;font-size:11.5px;margin-bottom:.375rem"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>Open Excel File</button>
+    <button class="btn ghost sm" onclick="openExcel()" style="width:100%;justify-content:center;font-size:11.5px;margin-bottom:.375rem"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>Export to Excel</button>
     <div style="border-top:1px solid var(--border);padding-top:.625rem;margin-top:.25rem">
       <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem">
         <div style="width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,#1E3A8A,#FDC819);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M16 7l3 3"/></svg></div>
@@ -3371,7 +3371,13 @@ function gv(id){var el=document.getElementById(id);return el?el.value:'';}
 function sv(id,v){var el=document.getElementById(id);if(el)el.value=v;}
 function escHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function todayStr(){return new Date().toISOString().slice(0,10);}
-function openExcel(){pywebview.api.open_excel();}
+function openExcel(){
+  toast('Preparing Excel export…','info');
+  pywebview.api.open_excel().then(function(r){
+    try{ r=JSON.parse(r); }catch(e){}
+    if(r && r.ok) toast('Excel copy created and opened','ok'); else toast('Export failed: '+((r&&r.error)||'unknown error'),'err');
+  }).catch(function(e){ toast('Export failed: '+e,'err'); });
+}
 
 function toast(msg, type){
   var wrap=document.getElementById('toast-wrap');
