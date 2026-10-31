@@ -495,6 +495,19 @@ class Storage:
             label = txt(desc) or f"{cur['Equipment Type']} {cur['Brand/Model']} (S/N:{cur['Serial No.']})"
             self._log(c, "DELETE", f"Deleted: {label}")
 
+    def remove_sample_data(self):
+        """Remove the demo assets a fresh install ships with (Serial No. starts with 'SAMPLE-') and their
+        transfer history. Everything else is left alone, the audit log is never edited (a new entry records
+        the removal) and a safety copy of the database is taken first. Returns how many assets were removed."""
+        with self._tx(write=False) as c:
+            if not c.execute('SELECT 1 FROM inventory WHERE substr("Serial No.", 1, 7) = ? LIMIT 1', ("SAMPLE-",)).fetchone():
+                return 0
+        with self._tx(snapshot="force") as c:
+            n = c.execute('DELETE FROM inventory WHERE substr("Serial No.", 1, 7) = ?', ("SAMPLE-",)).rowcount
+            c.execute("DELETE FROM history WHERE substr(serial, 1, 7) = ?", ("SAMPLE-",))
+            if n: self._log(c, "DELETE", f"Removed {n} sample asset{'s' if n != 1 else ''}")
+        return n
+
     def transfer_asset(self, row_id, asset_desc, serial, from_dept, to_dept, note, date, by="ICT Manager"):
         to_dept = txt(to_dept)
         if not to_dept: raise ValueError("Destination department is required")

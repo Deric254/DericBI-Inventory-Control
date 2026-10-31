@@ -751,6 +751,12 @@ tbody tr:hover{background:var(--bg3)}
       <div style="font-size:12px;color:var(--text3);letter-spacing:.03em">Inventory Control &nbsp;·&nbsp; <span style="color:var(--gold)">Cut Through Noise</span></div>
     </div>
     <div id="login-form">
+      <div id="login-user-wrap" style="display:none">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.5rem">Username</div>
+        <input id="login-user" type="text" placeholder="Enter your username" maxlength="32" autocomplete="username" spellcheck="false"
+          style="width:100%;padding:.7rem .95rem;background:var(--bg3);border:1px solid var(--border2);border-radius:9px;color:var(--text);font-size:14px;font-family:'DM Mono',monospace;outline:none;margin-bottom:.875rem;transition:border-color .15s"
+          onkeydown="if(event.key==='Enter')document.getElementById('pin-input').focus()">
+      </div>
       <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.5rem">Access PIN</div>
       <input id="pin-input" type="password" placeholder="Enter your PIN" maxlength="20"
         style="width:100%;padding:.7rem .95rem;background:var(--bg3);border:1px solid var(--border2);border-radius:9px;color:var(--text);font-size:14px;font-family:'DM Mono',monospace;outline:none;letter-spacing:.2em;margin-bottom:.875rem;transition:border-color .15s,box-shadow .15s"
@@ -780,7 +786,7 @@ tbody tr:hover{background:var(--bg3)}
       </div>
       <!-- New PIN after recovery -->
       <div id="recovery-reset-form" style="display:none;margin-top:.75rem;border-top:1px solid var(--border);padding-top:.875rem">
-        <div style="font-size:10px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.625rem">✅ Recovery verified — set a new PIN</div>
+        <div style="font-size:10px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.625rem">✅ Recovery verified — set a new PIN<span id="recovery-user" style="display:block;margin-top:.3rem;color:var(--text2);text-transform:none;letter-spacing:0;font-weight:500"></span></div>
         <input id="recovery-new-pin" type="password" placeholder="New PIN (min 4 chars)" maxlength="20"
           style="width:100%;padding:.7rem .95rem;background:var(--bg3);border:1px solid var(--border2);border-radius:9px;color:var(--text);font-size:14px;font-family:'DM Mono',monospace;outline:none;letter-spacing:.2em;margin-bottom:.5rem;transition:border-color .15s">
         <input id="recovery-confirm-pin" type="password" placeholder="Confirm new PIN" maxlength="20"
@@ -794,8 +800,12 @@ tbody tr:hover{background:var(--bg3)}
     </div>
     <div id="setup-form" style="display:none">
       <div style="background:var(--blue-dim);border:1px solid rgba(77,159,255,.2);border-radius:9px;padding:.875rem 1rem;margin-bottom:1.1rem;font-size:12.5px;color:var(--text2)">
-        First launch — set your access PIN to secure the system.
+        First launch — create your account to secure the system.
       </div>
+      <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.5rem">Username <span style="opacity:.6">(3–32 characters)</span></div>
+      <input id="setup-user" type="text" placeholder="Choose a username" maxlength="32" autocomplete="username" spellcheck="false"
+        style="width:100%;padding:.7rem .95rem;background:var(--bg3);border:1px solid var(--border2);border-radius:9px;color:var(--text);font-size:14px;font-family:'DM Mono',monospace;outline:none;margin-bottom:.875rem;transition:border-color .15s"
+        onkeydown="if(event.key==='Enter')document.getElementById('pin-new').focus()">
       <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.5rem">New PIN <span style="opacity:.6">(min 4 chars)</span></div>
       <input id="pin-new" type="password" placeholder="Create a PIN" maxlength="20"
         style="width:100%;padding:.7rem .95rem;background:var(--bg3);border:1px solid var(--border2);border-radius:9px;color:var(--text);font-size:14px;font-family:'DM Mono',monospace;outline:none;letter-spacing:.2em;margin-bottom:.625rem;transition:border-color .15s">
@@ -804,7 +814,7 @@ tbody tr:hover{background:var(--bg3)}
         onkeydown="if(event.key==='Enter')doSetPin()">
       <div id="setup-err" style="color:var(--red);font-size:12px;margin-bottom:.625rem;display:none"></div>
       <button onclick="doSetPin()" style="width:100%;padding:.75rem;background:var(--green);color:#000;border:none;border-radius:9px;font-family:'Syne',sans-serif;font-size:13.5px;font-weight:700;cursor:pointer;transition:all .15s">
-        ✅ &nbsp;Set PIN & Enter
+        ✅ &nbsp;Create Account & Enter
       </button>
     </div>
   </div>
@@ -847,7 +857,7 @@ tbody tr:hover{background:var(--bg3)}
       <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem">
         <div style="width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,#1E3A8A,#FDC819);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M16 7l3 3"/></svg></div>
         <div>
-          <div style="font-size:11px;color:var(--text);font-weight:600">ICT Manager</div>
+          <div id="sb-user" style="font-size:11px;color:var(--text);font-weight:600">ICT Manager</div>
           <div style="font-size:10px;color:var(--text3)">Authenticated</div>
         </div>
       </div>
@@ -1138,13 +1148,21 @@ tbody tr:hover{background:var(--bg3)}
       </div>
     </div>
 
+    <div class="card" id="sample-card" style="max-width:520px;margin-bottom:.875rem;display:none">
+      <div class="card-hd"><span class="card-title">🧹 Sample Data</span></div>
+      <div class="card-bd">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:1rem">This system came with <strong id="sample-count">0</strong> sample assets so you can explore it. Remove them when you are ready to add your own. Your own records are never touched, and a backup copy is saved first.</div>
+        <button class="btn del" onclick="removeSampleData()" style="font-size:12.5px">Remove sample data</button>
+      </div>
+    </div>
+
     <div class="card" style="max-width:520px;margin-bottom:.875rem">
       <div class="card-hd"><span class="card-title">🚪 Session</span></div>
       <div class="card-bd">
         <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem">
           <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#1E3A8A,#FDC819);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;box-shadow:0 0 16px rgba(77,159,255,.3)">🔑</div>
           <div>
-            <div style="font-size:13.5px;font-weight:700;color:var(--text)">ICT Manager</div>
+            <div id="sec-user" style="font-size:13.5px;font-weight:700;color:var(--text)">ICT Manager</div>
             <div style="font-size:11px;color:var(--text3);margin-top:.2rem">Active session &nbsp;·&nbsp; <span class="pulse" style="width:5px;height:5px;display:inline-block"></span> Authenticated</div>
           </div>
         </div>
@@ -1672,6 +1690,7 @@ function doRecoverAccess(){
     if(res.valid){
       document.getElementById('recovery-form').style.display='none';
       document.getElementById('recovery-reset-form').style.display='';
+      var ru=document.getElementById('recovery-user'); if(ru) ru.textContent=res.username?('Your username: '+res.username):'';
       setTimeout(function(){document.getElementById('recovery-new-pin').focus();},80);
     } else {
       errEl.style.display='';
@@ -1691,7 +1710,7 @@ function doResetPinViaRecovery(){
     var res=JSON.parse(r);
     if(res.ok){
       // PIN reset — show the new recovery key then reload
-      var msg='PIN reset successfully!\n\nYour NEW recovery key is:\n\n'+
+      var msg='PIN reset successfully!\n\n'+(res.username?'Your username: '+res.username+'\n\n':'')+'Your NEW recovery key is:\n\n'+
         (res.recovery_key||'(none generated)')+'\n\nSave this somewhere safe. It will not be shown again.';
       alert(msg);
       window.location.reload();
@@ -1705,22 +1724,38 @@ function initLogin(){
   pywebview.api.is_pin_set().then(function(r){
     var res=JSON.parse(r);
     if(res.set){
+      usernameMode=!!res.has_username;
+      document.getElementById('login-user-wrap').style.display=usernameMode?'':'none';
       document.getElementById('login-form').style.display='';
       document.getElementById('setup-form').style.display='none';
-      setTimeout(function(){document.getElementById('pin-input').focus();},100);
+      setTimeout(function(){document.getElementById(usernameMode?'login-user':'pin-input').focus();},100);
     } else {
       document.getElementById('login-form').style.display='none';
       document.getElementById('setup-form').style.display='';
-      setTimeout(function(){document.getElementById('pin-new').focus();},100);
+      setTimeout(function(){document.getElementById('setup-user').focus();},100);
     }
   });
 }
 
+var usernameMode=false;   // true when this install uses a username (set in initLogin)
+var CURRENT_USER=null;
+function applyUser(name){
+  CURRENT_USER=name||null;
+  if(name){                       // an account exists now: the sign-in screen must ask for the username
+    usernameMode=true;
+    var w=document.getElementById('login-user-wrap'); if(w) w.style.display='';
+  }
+  ['sb-user','sec-user'].forEach(function(id){var e=document.getElementById(id); if(e) e.textContent=name||'ICT Manager';});
+}
+
 function doLogin(){
   var pin=document.getElementById('pin-input').value;
-  pywebview.api.verify_pin(pin).then(function(r){
+  var lu=document.getElementById('login-user');
+  var user=lu?lu.value.trim():'';
+  pywebview.api.verify_pin(pin,user).then(function(r){
     var res=JSON.parse(r);
     if(res.valid){
+      applyUser(res.username);
       document.getElementById('login-overlay').style.display='none';
       document.getElementById('app').style.display='flex';
       loadApp();
@@ -1729,7 +1764,7 @@ function doLogin(){
     } else {
       var el=document.getElementById('login-err');
       el.style.display='';
-      el.textContent=res.error||'Incorrect PIN. Access denied.';
+      el.textContent=res.error||(usernameMode?'Incorrect username or PIN. Access denied.':'Incorrect PIN. Access denied.');
       document.getElementById('pin-input').value='';
       document.getElementById('pin-input').focus();
     }
@@ -1740,14 +1775,17 @@ function doSetPin(){
   var p1=document.getElementById('pin-new').value;
   var p2=document.getElementById('pin-confirm').value;
   var el=document.getElementById('setup-err');
+  var un=(document.getElementById('setup-user').value||'').trim();
+  if(un.length<3||un.length>32){el.style.display='';el.textContent='Username must be 3–32 characters.';return;}
   if(p1.length<4){el.style.display='';el.textContent='PIN must be at least 4 characters.';return;}
   if(p1!==p2){el.style.display='';el.textContent='PINs do not match.';return;}
-  pywebview.api.set_pin(p1).then(function(r){
+  pywebview.api.set_pin(p1,un).then(function(r){
     var res=JSON.parse(r);
     if(res.ok){
+      applyUser(res.username);
       // Show recovery key once — user must save it
       if(res.recovery_key){
-        alert('✅ PIN set!\n\nYour RECOVERY KEY is:\n\n'+res.recovery_key+'\n\nWrite this down and keep it safe.\nIf you forget your PIN, this key lets you reset it.\nIt will NOT be shown again.');
+        alert('✅ Account created!\n\nYour RECOVERY KEY is:\n\n'+res.recovery_key+'\n\nWrite this down and keep it safe.\nIf you forget your PIN, this key lets you reset it.\nIt will NOT be shown again.');
       }
       document.getElementById('login-overlay').style.display='none';
       document.getElementById('app').style.display='flex';
@@ -1836,7 +1874,7 @@ function nav(id){
   if(id==='history')   reload(function(){renderHistory();});
   if(id==='ink')       reload(function(){renderInk();});
   if(id==='config')    renderConfig();
-  if(id==='settings')  loadBackups();
+  if(id==='settings'){ loadBackups(); updateSampleCard(); }
 }
 
 // ══════════════════════════════════════════════════════
@@ -2370,6 +2408,25 @@ function saveAsset(){
       // ─────────────────────────────────────────────────────────
 
     } else toast(res.error||'Error saving','err');
+  });
+}
+
+function isSampleRow(r){ return String(r['Serial No.']||'').indexOf('SAMPLE-')===0; }
+function updateSampleCard(){
+  var card=document.getElementById('sample-card'); if(!card) return;
+  var n=rows.filter(isSampleRow).length;
+  card.style.display=n?'':'none';
+  document.getElementById('sample-count').textContent=n;
+}
+function removeSampleData(){
+  var n=rows.filter(isSampleRow).length;
+  if(!n||!confirm('Remove the '+n+' sample asset'+(n===1?'':'s')+'? Your own records are not affected, and a backup copy is saved first.')) return;
+  pywebview.api.remove_sample_data().then(function(r){
+    var res=JSON.parse(r);
+    if(res.ok){
+      toast(res.removed+' sample asset'+(res.removed===1?'':'s')+' removed','ok');
+      reload(function(){renderTable();renderDashboard();rebuildFilters();updateSampleCard();});
+    } else toast(res.error||'Error','err');
   });
 }
 
@@ -3307,6 +3364,8 @@ function doLogout(){
   // Hide app, show login overlay
   document.getElementById('app').style.display='none';
   document.getElementById('login-overlay').style.display='flex';
+  applyUser(null);
+  var lu=document.getElementById('login-user'); if(lu) lu.value='';
   document.getElementById('login-err').style.display='none';
   document.getElementById('login-form').style.display='';
   document.getElementById('setup-form').style.display='none';
@@ -3320,7 +3379,7 @@ function doLogout(){
   // Refocus: tell Electron to blur then refocus the window (replicates minimize/restore)
   // then focus the input after the OS focus cycle completes
   try { if(window.electronAPI&&window.electronAPI.refocus) window.electronAPI.refocus(); } catch(e){}
-  setTimeout(function(){ pinEl.focus(); pinEl.click(); }, 350);
+  setTimeout(function(){ var f=usernameMode?document.getElementById('login-user'):pinEl; f.focus(); f.click(); }, 350);
 }
 
 function changePin(){
@@ -3333,7 +3392,7 @@ function changePin(){
   if(np.length<4){msg.style.color='var(--red)';msg.textContent='New PIN must be at least 4 characters.';return;}
   if(np!==cnf){msg.style.color='var(--red)';msg.textContent='New PINs do not match.';return;}
   if(np===old){msg.style.color='var(--amber)';msg.textContent='New PIN must be different from current PIN.';return;}
-  pywebview.api.verify_pin(old).then(function(r){
+  pywebview.api.verify_pin(old,CURRENT_USER||'').then(function(r){
     var res=JSON.parse(r);
     if(!res.valid){msg.style.color='var(--red)';msg.textContent='Current PIN is incorrect.';document.getElementById('pin-old').focus();return;}
     pywebview.api.set_pin(np).then(function(r2){

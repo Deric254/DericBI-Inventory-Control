@@ -142,6 +142,15 @@ class ConfigEngine:
                 return True
             return False
 
+_USERNAME_MSG = "Username must be 3-32 characters: letters, numbers, spaces and . _ - @"
+
+def _clean_username(u):
+    """Validate an account name. Returns it trimmed, or raises ValueError."""
+    u = u.strip() if isinstance(u, str) else ""
+    if not re.fullmatch(r"[\w .@-]{3,32}", u) or not u.strip(" ._-@"):
+        raise ValueError(_USERNAME_MSG)
+    return u
+
 # ════════════════════════════════════════════
 # JS API BRIDGE
 # ════════════════════════════════════════════
@@ -151,6 +160,7 @@ class Api:
         self.cfg    = cfg
         self.window = None
         self._authed      = False     # True after a correct PIN this session
+        self._user        = None      # account name of the signed-in user (None for PIN-only installs)
         self._recovery_ok = False     # True after a correct recovery key (allows PIN reset)
         self._fails       = 0
         self._locked_until = 0.0
@@ -165,6 +175,7 @@ class Api:
     def lock_session(self):
         self._authed = False
         self._recovery_ok = False
+        self._user = None
         return json.dumps({"ok": True})
 
     def _throttle(self):
@@ -231,6 +242,12 @@ class Api:
         try:
             self.engine.delete_asset(int(row_num), desc)
             return json.dumps({"ok": True})
+        except Exception as e:
+            return json.dumps({"ok": False, "error": str(e)})
+
+    def remove_sample_data(self):
+        try:
+            return json.dumps({"ok": True, "removed": self.engine.remove_sample_data()})
         except Exception as e:
             return json.dumps({"ok": False, "error": str(e)})
 
@@ -413,15 +430,28 @@ class Api:
 
     # ── AUTH ──────────────────────────────────
     def is_pin_set(self):
-        return json.dumps({"ok": True, "set": os.path.exists(AUTH_FILE)})
+        has_user = False
+        if os.path.exists(AUTH_FILE):
+            try:
+                with open(AUTH_FILE) as f: has_user = bool(json.load(f).get("username"))
+            except Exception: pass
+        return json.dumps({"ok": True, "set": os.path.exists(AUTH_FILE), "has_username": has_user})
 
-    def set_pin(self, pin):
+    def set_pin(self, pin, username=None):
         try:
+            existing = os.path.exists(AUTH_FILE)
             # Changing an existing PIN needs a logged-in session or a verified recovery key.
-            if os.path.exists(AUTH_FILE) and not (self._authed or self._recovery_ok):
+            if existing and not (self._authed or self._recovery_ok):
                 return json.dumps({"ok": False, "error": "Not authorised"})
             if not isinstance(pin, str) or len(pin.strip()) < 4:
                 return json.dumps({"ok": False, "error": "PIN must be at least 4 characters"})
+            if existing:
+                # Changing / resetting a PIN keeps the account name (installs made before accounts have none).
+                try:
+                    with open(AUTH_FILE) as f: user = json.load(f).get("username") or None
+                except Exception: user = None
+            else:
+                user = _clean_username(username)      # first launch: the account name is required
             salt = secrets.token_hex(16)
             h    = _kdf(pin, salt)
             # Recovery key: XXXX-XXXX-XXXX-XXXX (shown once; only a hash is stored)
@@ -430,11 +460,13 @@ class Api:
             rkey_salt = secrets.token_hex(16)
             rkey_hash = _kdf(rkey_display, rkey_salt)
             rkey_hint = '-'.join([p[0]+'***' for p in rkey_display.split('-')])
-            _atomic_write_json(AUTH_FILE, {"hash": h, "salt": salt, "kdf": "pbkdf2", "iters": _PBKDF2_ITERS,
-                                           "rkey_hash": rkey_hash, "rkey_salt": rkey_salt, "rkey_kdf": "pbkdf2",
-                                           "rkey_iters": _PBKDF2_ITERS, "rkey_hint": rkey_hint})
-            self._authed = True; self._recovery_ok = False; self._register_ok()
-            return json.dumps({"ok": True, "recovery_key": rkey_display})
+            auth = {"hash": h, "salt": salt, "kdf": "pbkdf2", "iters": _PBKDF2_ITERS,
+                    "rkey_hash": rkey_hash, "rkey_salt": rkey_salt, "rkey_kdf": "pbkdf2",
+                    "rkey_iters": _PBKDF2_ITERS, "rkey_hint": rkey_hint}
+            if user: auth["username"] = user
+            _atomic_write_json(AUTH_FILE, auth)
+            self._authed = True; self._recovery_ok = False; self._user = user; self._register_ok()
+            return json.dumps({"ok": True, "recovery_key": rkey_display, "username": user})
         except Exception as e:
             return json.dumps({"ok": False, "error": str(e)})
 
@@ -465,11 +497,13 @@ class Api:
             ok = hmac.compare_digest(cand, rkey_hash)
             if ok: self._recovery_ok = True; self._register_ok()
             else:  self._register_fail()
-            return json.dumps({"valid": ok})
+            resp = {"valid": ok}
+            if ok and data.get("username"): resp["username"] = data["username"]
+            return json.dumps(resp)
         except Exception as e:
             return json.dumps({"valid": False, "error": str(e)})
 
-    def verify_pin(self, pin):
+    def verify_pin(self, pin, username=None):
         try:
             msg = self._throttle()
             if msg: return json.dumps({"ok": True, "valid": False, "error": msg})
@@ -480,8 +514,12 @@ class Api:
             legacy = data.get('kdf') != 'pbkdf2'
             cand = _kdf(str(pin), data['salt'], data.get('iters'), legacy=legacy)
             ok = hmac.compare_digest(cand, data['hash'])
+            stored_user = data.get('username') or None
+            if stored_user:       # accounts need the right username AND PIN (same error either way)
+                given = str(username or "").strip().casefold().encode("utf-8")
+                ok = hmac.compare_digest(given, stored_user.strip().casefold().encode("utf-8")) and ok
             if ok:
-                self._authed = True; self._register_ok()
+                self._authed = True; self._user = stored_user; self._register_ok()
                 if legacy:   # silently upgrade an old SHA-256 PIN hash to PBKDF2
                     try:
                         salt = secrets.token_hex(16)
@@ -490,7 +528,9 @@ class Api:
                     except Exception: pass
             else:
                 self._register_fail()
-            return json.dumps({"ok": True, "valid": ok})
+            resp = {"ok": True, "valid": ok}
+            if ok and stored_user: resp["username"] = stored_user
+            return json.dumps(resp)
         except Exception as e:
             return json.dumps({"ok": False, "error": str(e)})
 

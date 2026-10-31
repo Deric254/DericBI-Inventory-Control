@@ -19,6 +19,12 @@ all, even if the PC loses power in the middle of it.
 * **Move to a new PC / full backup:** Security → *Export Full Backup*, then *Restore* on the new PC. The zip contains the
   database, an Excel copy, your PIN file and settings.
 * **Undo a mistake:** Security → Backups, or restore a file from `backups\daily\`.
+* **Create your account:** on first launch you choose a username and a PIN. Installs made before accounts existed keep
+  signing in with the PIN alone; nothing is forced on them. Forgot your username? Enter your recovery key on the sign-in
+  screen and it is shown to you.
+* **Start with your own data:** a fresh install comes with a few sample assets (serial numbers starting `SAMPLE-`).
+  Security → *Sample Data* → *Remove sample data* deletes only those, after saving a safety copy. The card disappears once
+  they are gone, and they never come back.
 
 ## Rules the database enforces
 * Serial numbers are unique among active assets (blank / "N/A" / "none" are allowed to repeat; Disposed and Replaced assets

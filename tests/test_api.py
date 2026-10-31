@@ -8,29 +8,29 @@ class Auth(unittest.TestCase):
     def setUp(self): self.eng, self.api = fresh()
 
     def test_pin_flow_and_pbkdf2(self):
-        r = json.loads(self.api.set_pin("1234")); self.assertTrue(r["ok"]); self.assertEqual(len(r["recovery_key"]), 19)
+        r = json.loads(self.api.set_pin("1234", "tester")); self.assertTrue(r["ok"]); self.assertEqual(len(r["recovery_key"]), 19)
         d = json.load(open(os.path.join(TMP, "auth.json")))
         self.assertEqual(d["kdf"], "pbkdf2"); self.assertNotIn("rkey_plain", d)
         self.api.lock_session()
-        self.assertFalse(json.loads(self.api.verify_pin("0000"))["valid"])
-        self.assertTrue(json.loads(self.api.verify_pin("1234"))["valid"])
+        self.assertFalse(json.loads(self.api.verify_pin("0000", "tester"))["valid"])
+        self.assertTrue(json.loads(self.api.verify_pin("1234", "tester"))["valid"])
 
     def test_lockout_after_repeated_failures(self):
-        self.api.set_pin("1234"); self.api.lock_session()
-        for _ in range(5): self.api.verify_pin("bad")
-        r = json.loads(self.api.verify_pin("1234")); self.assertFalse(r["valid"]); self.assertIn("Too many", r["error"])
+        self.api.set_pin("1234", "tester"); self.api.lock_session()
+        for _ in range(5): self.api.verify_pin("bad", "tester")
+        r = json.loads(self.api.verify_pin("1234", "tester")); self.assertFalse(r["valid"]); self.assertIn("Too many", r["error"])
 
     def test_cannot_change_pin_without_login_or_recovery(self):
-        self.api.set_pin("1234"); self.api.lock_session()
+        self.api.set_pin("1234", "tester"); self.api.lock_session()
         self.assertFalse(json.loads(self.api.set_pin("9999"))["ok"])
-        self.assertTrue(json.loads(self.api.verify_pin("1234"))["valid"])
+        self.assertTrue(json.loads(self.api.verify_pin("1234", "tester"))["valid"])
 
     def test_recovery_key_allows_reset(self):
-        key = json.loads(self.api.set_pin("1234"))["recovery_key"]; self.api.lock_session()
+        key = json.loads(self.api.set_pin("1234", "tester"))["recovery_key"]; self.api.lock_session()
         self.assertFalse(json.loads(self.api.verify_recovery_key("AAAA-AAAA-AAAA-AAAA"))["valid"])
         self.assertTrue(json.loads(self.api.verify_recovery_key(key.lower()))["valid"])
         self.assertTrue(json.loads(self.api.set_pin("5678"))["ok"]); self.api.lock_session()
-        self.assertTrue(json.loads(self.api.verify_pin("5678"))["valid"])
+        self.assertTrue(json.loads(self.api.verify_pin("5678", "tester"))["valid"])
 
     def test_legacy_sha256_pin_still_works_and_is_upgraded(self):
         salt = "ab" * 16
@@ -110,10 +110,10 @@ class HttpGuards(unittest.TestCase):
     def test_public_method_ok_before_login(self): self.assertEqual(self.call("is_pin_set")[0], 200)
 
     def test_private_methods_blocked_until_login(self):
-        self.api.set_pin("1234"); self.api.lock_session()
-        for m in ("load_data", "get_recovery_hint", "export_full_backup", "delete_asset", "open_excel", "ink_action"):
+        self.api.set_pin("1234", "tester"); self.api.lock_session()
+        for m in ("load_data", "get_recovery_hint", "export_full_backup", "delete_asset", "open_excel", "ink_action", "remove_sample_data"):
             self.assertEqual(self.call(m, [1, "x"] if m == "delete_asset" else [])[0], 401, m)
-        self.assertEqual(self.call("verify_pin", ["1234"])[0], 200); self.assertEqual(self.call("load_data")[0], 200)
+        self.assertEqual(self.call("verify_pin", ["1234", "tester"])[0], 200); self.assertEqual(self.call("load_data")[0], 200)
 
     def test_internal_attributes_not_callable(self):
         for m in ("_throttle", "needs_login", "engine", "PUBLIC_METHODS"): self.assertEqual(self.call(m)[0], 404, m)
@@ -126,7 +126,7 @@ class HttpGuards(unittest.TestCase):
         self.assertEqual(self.get("/fonts/../main.py")[0], 404); self.assertEqual(self.get("/fonts/x.txt")[0], 404)
 
     def test_downloads_require_login_when_pin_set(self):
-        self.api.set_pin("1234"); self.api.lock_session()
+        self.api.set_pin("1234", "tester"); self.api.lock_session()
         self.assertEqual(self.get("/reports/x.pdf")[0], 401); self.assertEqual(self.get("/backups/x.db")[0], 401)
 
 
