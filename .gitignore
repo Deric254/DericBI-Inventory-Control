@@ -37,3 +37,7 @@ assets/auth.json
 *.sqlite3
 exports/
 startup_error.txt
+
+# The owner's PRIVATE licence key: never commit it (back it up somewhere safe instead)
+*-owner.key
+dic-owner.key

@@ -46,6 +46,9 @@ jobs:
           python -m pip install --quiet openpyxl reportlab
           python -m unittest discover -s tests -v
 
+      - name: Licensing kit self-test
+        run: python src/licensing/selftest.py
+
       # Fresh installs are seeded from assets/. Refuse to build if real data or a PIN got in.
       - name: Guard - no private data in the installer
         shell: bash
@@ -74,6 +77,11 @@ jobs:
               sys.exit(1)
           print("OK: seed data is sample-only and no PIN is bundled")
           PY
+
+      # Every copy refuses to run without the owner's public key, and a committed private key would let anyone
+      # mint licences. Checked before the version is reserved, so a failure never uses up a version number.
+      - name: Check the licence owner key is set and no private key is committed
+        run: python src/licensing/check_owner_key.py
 
       # Reserve the next version in the repo BEFORE building, so version numbers
       # are unique and always increase (a failed build just skips a number).
@@ -104,6 +112,22 @@ jobs:
         shell: bash
         run: |
           ./python/python.exe -c "import openpyxl, reportlab, sqlite3; print('python deps OK', openpyxl.__version__, reportlab.Version, 'sqlite', sqlite3.sqlite_version)"
+
+      # A fresh copy of the shipped configuration must be locked, and the bundled Python must be able to verify licences.
+      - name: Verify the shipped build is licence-locked
+        shell: bash
+        run: |
+          ./python/python.exe - <<'PY'
+          import sys, tempfile
+          sys.path.insert(0, "src")
+          import licence_gate as g
+          g.set_data_dir(tempfile.mkdtemp())
+          lic = g.get_licensing()
+          assert lic.configured(), "the owner public key is missing or invalid in this build"
+          state = lic.state()
+          assert not state["ok"] and state["kind"] == "unlicensed", state
+          print("OK: a fresh copy of this build is licence-locked")
+          PY
 
       - name: Build installer and upload to a draft release
         shell: bash

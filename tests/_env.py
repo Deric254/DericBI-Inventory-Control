@@ -11,6 +11,31 @@ os.environ["ICT_API_TOKEN"]  = "test-token"
 sys.path.insert(0, SRC)
 import main as app          # noqa: E402
 import storage              # noqa: E402
+import licence_gate         # noqa: E402
+from licensing.licensing import Licensing   # noqa: E402
+
+
+class MemoryStore:
+    def __init__(self): self.data = {}
+    def get(self, key, default=None): return self.data.get(key, default)
+    def set(self, key, value): self.data[key] = value
+
+
+def make_licensing(today=None):
+    """A Licensing over a THROWAWAY key (never the real one): (instance, owner key text, owner key seed)."""
+    key_text, public = Licensing.make_owner_key(licence_gate.PREFIX)
+    kw = {} if today is None else {"today": lambda: today}
+    lic = Licensing(licence_gate.APP_ID, licence_gate.PREFIX, public, MemoryStore(), **kw)
+    return lic, key_text, lic.parse_owner_key(key_text)
+
+
+def use_owner_copy():
+    """Every API call is refused unless the copy is licensed, so the suite runs as an owner copy made with a
+    throwaway key. The gate itself stays fully active; test_licence.py swaps in locked copies to prove it refuses."""
+    lic, key_text, _ = make_licensing(); lic.claim_owner(key_text); licence_gate.use_licensing(lic)
+
+
+use_owner_copy()
 
 
 def wipe(d=TMP):

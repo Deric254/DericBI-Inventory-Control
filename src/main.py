@@ -51,6 +51,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from storage import (Storage, StorageError, INV_COLS, INK_CODES, INK_NAMES, INK_DEFAULTS,
                      SHEET_INV, SHEET_HISTORY, SHEET_REPLACE, SHEET_INK, SHEET_LOG)
 
+import licence_gate
+from licensing.licensing import LicenceError
+licence_gate.set_data_dir(BASE_DIR)
+
 BACKUP_DIR = os.path.join(BASE_DIR, "backups")
 AUTH_FILE  = os.path.join(BASE_DIR, "auth.json")
 CONFIG_FILE= os.path.join(BASE_DIR, "config.json")
@@ -167,7 +171,8 @@ class Api:
 
     # Methods callable before login. Everything else needs an authenticated session.
     PUBLIC_METHODS = frozenset({"is_pin_set", "verify_pin", "verify_recovery_key",
-                                "set_pin", "get_logo_path", "lock_session"})
+                                "set_pin", "get_logo_path", "lock_session",
+                                "licence_state", "activate_licence", "claim_owner"})
 
     def needs_login(self):
         return os.path.exists(AUTH_FILE) and not self._authed
@@ -429,6 +434,35 @@ class Api:
             return json.dumps({"ok": False, "error": str(e)})
 
     # ── AUTH ──────────────────────────────────
+    # ── Licence (per computer, offline; see licence_gate.py) ────────────────
+    def licence_state(self):
+        return json.dumps({"ok": True, "licence": licence_gate.public_state()})
+
+    def activate_licence(self, licence):
+        """Activate this copy, or renew it. A renewal must be for the same person who holds the current licence."""
+        try:
+            if not isinstance(licence, str) or len(licence) > 4096:
+                raise LicenceError("That doesn't look like a licence. Paste the whole text the owner sent you.")
+            lic = licence_gate.get_licensing()
+            current = lic.state()
+            holder = current.get("user") if current.get("kind") == "licensed" else None
+            lic.activate(licence, expect_user=holder)
+            licence_gate.reset_cache()
+            return json.dumps({"ok": True, "licence": licence_gate.public_state()})
+        except LicenceError as e:
+            return json.dumps({"ok": False, "error": str(e)})
+
+    def claim_owner(self, owner_key):
+        """The owner proves it is their own computer, once. The key is used in memory and never stored."""
+        try:
+            if not isinstance(owner_key, str) or len(owner_key) > 512:
+                raise LicenceError("That isn't an owner key.")
+            licence_gate.get_licensing().claim_owner(owner_key)
+            licence_gate.reset_cache()
+            return json.dumps({"ok": True, "licence": licence_gate.public_state()})
+        except LicenceError as e:
+            return json.dumps({"ok": False, "error": str(e)})
+
     def is_pin_set(self):
         has_user = False
         if os.path.exists(AUTH_FILE):
@@ -769,6 +803,8 @@ def make_handler(api, ui_path, browser_mode=False):
             if not self._origin_ok():
                 self._send(403, "Forbidden"); return
             path = urllib.parse.urlparse(self.path).path
+            if (path.startswith("/reports/") or path.startswith("/backups/")) and not licence_gate.current_state()["ok"]:
+                self._send(402, "Licence required"); return
             if (path.startswith("/reports/") or path.startswith("/backups/")) and api.needs_login():
                 self._send(401, "Locked"); return
             if path in ("/", "/ui.html"):
@@ -860,6 +896,10 @@ def make_handler(api, ui_path, browser_mode=False):
             if name.startswith("_") or name.isupper() or not callable(getattr(api, name, None)) or name in ("needs_login",):
                 self._send(404, json.dumps({"ok": False, "error": "Unknown API method"}))
                 return
+            if name not in licence_gate.LICENCE_METHODS:
+                lic_state = licence_gate.current_state()
+                if not lic_state["ok"]:
+                    self._send(402, json.dumps(licence_gate.refusal(lic_state))); return
             if name not in api.PUBLIC_METHODS and api.needs_login():
                 self._send(401, json.dumps({"ok": False, "locked": True, "error": "Session locked — please log in again"}))
                 return

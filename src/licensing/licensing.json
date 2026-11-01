@@ -1,0 +1,6 @@
+{
+  "app_id": "DericBI Inventory Control",
+  "prefix": "DIC",
+  "public_key_file": "src/licence_owner_key.py",
+  "public_key_var": "OWNER_PUBLIC_KEY"
+}

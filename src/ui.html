@@ -740,6 +740,44 @@ tbody tr:hover{background:var(--bg3)}
 <body>
 
 <!-- ── LOGIN GATE ─────────────────────────── -->
+<!-- ── Licence screen: shown instead of the app while this copy has no valid licence ── -->
+<div id="licence-overlay" style="position:fixed;inset:0;background:var(--bg);z-index:100000;display:none;flex-direction:column;align-items:center;justify-content:center;overflow:auto">
+  <div style="position:relative;background:var(--bg2);border:1px solid var(--border2);border-radius:18px;padding:2.25rem;width:420px;max-width:92vw;box-shadow:0 32px 80px rgba(0,0,0,.6);margin:1rem">
+    <div style="text-align:center;margin-bottom:1.5rem">
+      <img src="/logo" alt="" onerror="this.style.display='none'" style="width:64px;height:64px;object-fit:contain;display:block;margin:0 auto .75rem">
+      <div id="lic-title" style="font-family:'Syne',sans-serif;font-size:18px;font-weight:700;margin-bottom:.4rem;color:var(--text)">Licence required</div>
+      <div id="lic-msg" style="font-size:12px;color:var(--text3);line-height:1.5"></div>
+    </div>
+    <div id="lic-body">
+      <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.5rem">Activation code</div>
+      <div style="display:flex;gap:.5rem;margin-bottom:.4rem">
+        <div id="lic-code" style="flex:1;padding:.7rem .95rem;background:var(--bg3);border:1px solid var(--border2);border-radius:9px;color:var(--text);font-size:16px;font-family:'DM Mono',monospace;letter-spacing:.15em;text-align:center;user-select:all">—</div>
+        <button id="lic-copy" onclick="copyActivationCode()" style="padding:0 .9rem;background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:9px;font-size:12px;cursor:pointer">Copy</button>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:1rem">Send this code to the owner. They will send back a licence for this computer.</div>
+      <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.5rem">Licence</div>
+      <textarea id="lic-input" rows="4" placeholder="Paste the whole licence text here" spellcheck="false" style="width:100%;padding:.7rem .95rem;background:var(--bg3);border:1px solid var(--border2);border-radius:9px;color:var(--text);font-size:14px;font-family:'DM Mono',monospace;outline:none;transition:border-color .15s;resize:vertical;margin-bottom:.875rem"></textarea>
+      <div id="lic-err" style="color:var(--red);font-size:12px;margin-bottom:.625rem;display:none;background:var(--red-dim);border:1px solid rgba(255,77,94,.2);border-radius:6px;padding:.5rem .75rem"></div>
+      <button id="lic-activate" onclick="submitLicence()" style="width:100%;padding:.75rem;background:var(--blue);color:#000;border:none;border-radius:9px;font-family:'Syne',sans-serif;font-size:13.5px;font-weight:700;cursor:pointer;transition:all .15s">Activate</button>
+      <div id="lic-owner-wrap" style="margin-top:1rem;border-top:1px solid var(--border);padding-top:.875rem;text-align:center">
+        <span onclick="toggleOwnerKey()" style="font-size:11px;color:var(--text3);cursor:pointer;text-decoration:underline;opacity:.7">I'm the owner of this system</span>
+        <div id="lic-owner-form" style="display:none;margin-top:.75rem;text-align:left">
+          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.5rem">Owner key</div>
+          <input id="lic-owner-key" type="password" autocomplete="off" spellcheck="false" style="width:100%;padding:.7rem .95rem;background:var(--bg3);border:1px solid var(--border2);border-radius:9px;color:var(--text);font-size:14px;font-family:'DM Mono',monospace;outline:none;transition:border-color .15s;margin-bottom:.4rem" onkeydown="if(event.key==='Enter')submitOwnerKey()">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:.75rem">Used once to prove ownership on this computer. It is never stored.</div>
+          <button id="lic-owner-btn" onclick="submitOwnerKey()" style="width:100%;padding:.6rem;background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:9px;font-size:12.5px;cursor:pointer">Use owner key</button>
+        </div>
+      </div>
+      <div id="lic-close-wrap" style="display:none;text-align:center;margin-top:.875rem"><span onclick="closeLicence()" style="font-size:11px;color:var(--text3);cursor:pointer;text-decoration:underline;opacity:.7">Close</span></div>
+    </div>
+  </div>
+</div>
+<!-- Small corner notice: only appears when 14 days or fewer remain, never moves the layout -->
+<div id="licence-notice" style="display:none;position:fixed;bottom:12px;right:12px;z-index:9000;align-items:center;gap:.75rem;background:var(--bg2);border:1px solid var(--gold);border-radius:10px;padding:.5rem .75rem;font-size:12px;color:var(--text);box-shadow:0 8px 24px rgba(0,0,0,.35)">
+  <span id="licence-notice-text"></span>
+  <button onclick="openRenew()" style="padding:.25rem .6rem;background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:6px;font-size:11.5px;cursor:pointer">Renew</button>
+</div>
+
 <div id="login-overlay" style="position:fixed;inset:0;background:var(--bg);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;">
   <!-- subtle grid bg -->
   <div style="position:absolute;inset:0;background-image:linear-gradient(rgba(77,159,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(77,159,255,.03) 1px,transparent 1px);background-size:40px 40px;pointer-events:none"></div>
@@ -1801,6 +1839,7 @@ function doSetPin(){
 // LOAD APP
 // ══════════════════════════════════════════════════════
 function loadApp(){
+  refreshLicenceNoticeFromServer();
   // Try to load logo.png via the API for sidebar and login screen branding
   try{
     pywebview.api.get_logo_path().then(function(p){
@@ -3365,6 +3404,7 @@ function doLogout(){
   document.getElementById('app').style.display='none';
   document.getElementById('login-overlay').style.display='flex';
   applyUser(null);
+  hideLicenceNotice();
   var lu=document.getElementById('login-user'); if(lu) lu.value='';
   document.getElementById('login-err').style.display='none';
   document.getElementById('login-form').style.display='';
@@ -3512,10 +3552,118 @@ function toggleTheme(){
   });
 })();
 
+/* ── Licence (per computer, offline) ───────────────────────────────────── */
+var licenceState=null, licenceBooting=true, licenceChecking=false;
+var LICENCE_WARNING_DAYS=14;
+function licEl(id){return document.getElementById(id);}
+
+// Any call the server refuses for want of a licence (e.g. it expired mid-session) brings the licence screen up.
+function wrapLicenceWatch(){
+  if(window.__licenceWrapped) return;
+  window.__licenceWrapped=true;
+  var raw=window.pywebview.api;
+  window.pywebview.api=new Proxy(raw,{get:function(t,name){
+    var f=t[name]; if(typeof f!=='function') return f;
+    return function(){
+      return Promise.resolve(f.apply(t,arguments)).then(function(txt){ licenceWatch(txt); return txt; });
+    };
+  }});
+}
+function licenceWatch(txt){
+  if(typeof txt!=='string'||txt.length>800||txt.indexOf('"licence"')<0) return;
+  var r; try{ r=JSON.parse(txt); }catch(e){ return; }
+  if(!r||r.ok!==false||!r.licence||r.licence.ok!==false||licenceChecking) return;
+  licenceChecking=true;
+  pywebview.api.licence_state().then(function(x){
+    licenceChecking=false;
+    var s=(JSON.parse(x).licence)||r.licence;
+    if(!s.ok) showLicence(s,r.error||s.message,false);
+  });
+}
+function showLicence(state,msg,renew){
+  var configured=state.kind!=='unconfigured';
+  licEl('lic-title').textContent=renew?'Renew licence':'Licence required';
+  licEl('lic-msg').textContent=renew?('Your licence expires '+(state.expires||'soon')+'. Paste the new licence the owner sends you.'):(msg||state.message||'');
+  licEl('lic-body').style.display=configured?'':'none';
+  licEl('lic-code').textContent=state.install_id||'—';
+  licEl('lic-owner-wrap').style.display=renew?'none':'';
+  licEl('lic-close-wrap').style.display=renew?'':'none';
+  licEl('lic-input').value=''; licEl('lic-owner-key').value='';
+  licEl('lic-err').style.display='none'; licEl('lic-owner-form').style.display='none';
+  licEl('lic-copy').textContent='Copy';
+  licEl('licence-overlay').style.display='flex';
+  setTimeout(function(){ if(configured) licEl('lic-input').focus(); },100);
+}
+function hideLicence(){
+  licEl('licence-overlay').style.display='none';
+  licEl('lic-owner-key').value=''; licEl('lic-input').value='';
+}
+function closeLicence(){ hideLicence(); }
+function licError(text){ var e=licEl('lic-err'); e.textContent=text; e.style.display=''; }
+function copyActivationCode(){
+  var code=licEl('lic-code').textContent; if(!code||code==='—') return;
+  var done=function(){ licEl('lic-copy').textContent='Copied'; };
+  try{ navigator.clipboard.writeText(code).then(done,function(){}); }catch(e){}
+}
+function toggleOwnerKey(){
+  var f=licEl('lic-owner-form'); f.style.display=f.style.display==='none'?'':'none';
+  if(f.style.display!=='none') setTimeout(function(){licEl('lic-owner-key').focus();},50);
+}
+function afterLicenceOk(state){
+  licenceState=state; hideLicence();
+  if(licenceBooting){ licenceBooting=false; initLogin(); }
+  refreshLicenceNotice(state);
+}
+function submitLicence(){
+  var t=licEl('lic-input').value.trim();
+  if(!t){ licError('Paste the licence text first.'); return; }
+  var b=licEl('lic-activate'); b.disabled=true; b.textContent='Checking…'; licEl('lic-err').style.display='none';
+  pywebview.api.activate_licence(t).then(function(r){
+    b.disabled=false; b.textContent='Activate';
+    var res=JSON.parse(r);
+    if(res.ok) afterLicenceOk(res.licence); else licError(res.error||'That licence could not be used.');
+  });
+}
+function submitOwnerKey(){
+  var k=licEl('lic-owner-key').value.trim();
+  if(!k){ licError('Paste the owner key first.'); return; }
+  var b=licEl('lic-owner-btn'); b.disabled=true; b.textContent='Checking…'; licEl('lic-err').style.display='none';
+  pywebview.api.claim_owner(k).then(function(r){
+    b.disabled=false; b.textContent='Use owner key'; licEl('lic-owner-key').value='';
+    var res=JSON.parse(r);
+    if(res.ok) afterLicenceOk(res.licence); else licError(res.error||'That owner key could not be used.');
+  });
+}
+function refreshLicenceNotice(state){
+  var el=licEl('licence-notice'); if(!el) return;
+  var s=state||licenceState;
+  if(s&&s.kind==='licensed'&&typeof s.days_left==='number'&&s.days_left<=LICENCE_WARNING_DAYS){
+    var d=s.days_left;
+    licEl('licence-notice-text').textContent='Licence expires '+(d<=0?'today':d===1?'tomorrow':'in '+d+' days')+'.';
+    el.style.display='flex';
+  } else el.style.display='none';
+}
+function refreshLicenceNoticeFromServer(){
+  pywebview.api.licence_state().then(function(r){ var s=JSON.parse(r).licence; if(s){ licenceState=s; refreshLicenceNotice(s); } });
+}
+function hideLicenceNotice(){ var el=licEl('licence-notice'); if(el) el.style.display='none'; }
+function openRenew(){
+  pywebview.api.licence_state().then(function(r){ var s=JSON.parse(r).licence; if(s&&s.kind==='licensed') showLicence(s,'',true); });
+}
+function initLicence(){
+  wrapLicenceWatch();
+  pywebview.api.licence_state().then(function(r){
+    var res=JSON.parse(r), s=res.licence;
+    if(!s){ licenceBooting=false; initLogin(); return; }     // backend not answering: let the normal startup report it
+    if(s.ok){ licenceState=s; licenceBooting=false; initLogin(); }
+    else showLicence(s,s.message,false);
+  });
+}
+
 window.addEventListener('pywebviewready', function(){
   // Re-focus the Electron window so keyboard input always works on load/reload
   try { if(window.electronAPI && window.electronAPI.refocus) window.electronAPI.refocus(); } catch(e){}
-  initLogin();
+  initLicence();
 });
 
 </script>
