@@ -1993,14 +1993,6 @@ function buildDropdowns(){
   fillSelWithCustom('rep-new-cond', ['New','Good','Fair','Good (Refurbished)'], false);
 }
 
-function fillSel(id, arr, withBlank){
-  var el=document.getElementById(id); if(!el)return;
-  var cur=el.value;
-  el.innerHTML='';
-  if(withBlank){ var o=document.createElement('option'); o.value=''; o.textContent='Select…'; el.appendChild(o); }
-  arr.forEach(function(v){ var o=document.createElement('option'); o.value=v; o.textContent=v; el.appendChild(o); });
-  if(cur) el.value=cur;
-}
 
 function rebuildFilters(){
   typeSet={}; deptSet={};
@@ -2524,17 +2516,6 @@ function pickAssetForTransfer(rowNum){
   openTransferForRow(rowNum);
 }
 
-function openTransferModal(){
-  document.getElementById('xfer-row').value='';
-  document.getElementById('xfer-serial').value='';
-  document.getElementById('xfer-from-dept').value='';
-  document.getElementById('xfer-asset-info').textContent='Select an asset from the Inventory tab to transfer it.';
-  document.getElementById('xfer-to-dept').value='';
-  document.getElementById('xfer-note').value='';
-  document.getElementById('xfer-date').value=todayStr();
-  document.getElementById('xfer-by').value='';
-  openModal('ov-transfer');
-}
 
 function openTransferForRow(rowNum){
   var r=rows.find(function(x){return x._row===rowNum;});
@@ -3169,11 +3150,6 @@ function generateReport(){
   toast('Report generated — '+total+' active assets','ok');
 }
 
-function printReport(){
-  // Make sure report is generated first
-  if(!document.getElementById('report-output').innerHTML){generateReport();}
-  setTimeout(function(){window.print();},200);
-}
 
 // ══════════════════════════════════════════════════════
 // INK
@@ -3228,9 +3204,6 @@ function renderInk(){
     var stockRows=CODES.map(function(code){
       var s=inkState[code]||{store:0,ictRoom:0};
       var total=s.store+s.ictRoom;
-      var maxTotal=INK_MAX*2;
-      var pctStore=Math.min(100,Math.round((s.store/INK_MAX)*100));
-      var pctIct=Math.min(100,Math.round((s.ictRoom/INK_MAX)*100));
       var col=INK_COLORS[code]||'#888';
       var isOut=total===0, isLow=total<=INK_LOW&&total>0;
       var statusCol=isOut?'var(--red)':isLow?'var(--amber)':'var(--green)';
@@ -3272,7 +3245,6 @@ function renderInk(){
   CODES.forEach(function(code){
     var s=inkState[code]||{store:0,ictRoom:0};
     var total=s.store+s.ictRoom;
-    var pct=Math.min(100,Math.round((total/(INK_MAX*2))*100));
     var col=INK_COLORS[code]||'#888';
     var isOut=total===0, isLow=total<=INK_LOW&&total>0;
     var statusCol=isOut?'var(--red)':isLow?'var(--amber)':'var(--green)';
@@ -3445,21 +3417,6 @@ function changePin(){
   });
 }
 
-function buildInstaller(){
-  var msg=document.getElementById('build-msg');
-  msg.textContent='Building…';
-  pywebview.api.build_installer().then(function(r){
-    var res=JSON.parse(r);
-    if(res.ok){
-      msg.style.color='var(--green)';
-      msg.textContent='✅ Installer files created! Check your app folder for INSTALL_ON_NEW_PC.bat / .sh';
-      toast('Installer files ready','ok');
-    } else {
-      msg.style.color='var(--red)';
-      msg.textContent=res.error||'Error';
-    }
-  });
-}
 
 // ══════════════════════════════════════════════════════
 // HELPERS
@@ -3467,7 +3424,6 @@ function buildInstaller(){
 function openModal(id){document.getElementById(id).classList.add('on');}
 function closeModal(id){document.getElementById(id).classList.remove('on');}
 function gv(id){var el=document.getElementById(id);return el?el.value:'';}
-function sv(id,v){var el=document.getElementById(id);if(el)el.value=v;}
 function escHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function todayStr(){return new Date().toISOString().slice(0,10);}
 function openExcel(){
@@ -3524,7 +3480,7 @@ function applyTheme(light){
     if(btn) btn.innerHTML=icon('sun',16);
   } else {
     document.documentElement.classList.remove('light');
-    var btn=document.getElementById('theme-btn');
+    btn=document.getElementById('theme-btn');
     if(btn) btn.innerHTML=icon('moon',16);
   }
 }

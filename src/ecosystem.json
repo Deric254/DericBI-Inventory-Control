@@ -1,0 +1,8 @@
+{
+  "contract": "dericbi.ecosystem/1",
+  "id": "inventory-control",
+  "name": "DericBI Inventory Control",
+  "role": "keeps a record of an organisation's ICT equipment: what each item is, where it is and who has it",
+  "offers": ["assets.register", "reports.pdf", "export.xlsx"],
+  "accepts": ["import.xlsx"]
+}

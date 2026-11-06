@@ -125,6 +125,22 @@ class HttpGuards(unittest.TestCase):
         st, body, r = self.get("/fonts/inter-latin-400-normal.woff2"); self.assertEqual((st, r.getheader("Content-Type")), (200, "font/woff2")); self.assertTrue(body[:4] == b"wOF2")
         self.assertEqual(self.get("/fonts/../main.py")[0], 404); self.assertEqual(self.get("/fonts/x.txt")[0], 404)
 
+    def test_ecosystem_card_is_public_secret_free_and_follows_the_file(self):
+        self.api.set_pin("1234", "tester"); self.api.lock_session()             # even locked: it holds no data
+        st, body, r = self.get("/api/ecosystem/card")
+        card = json.loads(body); self.assertEqual((st, r.getheader("Content-Type")), (200, "application/json; charset=utf-8"))
+        self.assertEqual(card["contract"], "dericbi.ecosystem/1"); self.assertTrue(card["id"] and card["name"])
+        self.assertTrue(all(isinstance(x, str) for x in card["offers"] + card["accepts"]))
+        self.assertFalse(any(w in body.decode().lower() for w in ("token", "secret", "password", "pin")))
+        f = os.path.join(app.BUNDLE_DIR, "ecosystem.json"); keep = open(f, "rb").read()
+        try:
+            open(f, "w").write(json.dumps(dict(card, name="Renamed")))           # editing the file changes the card; no code involved
+            self.assertEqual(json.loads(self.get("/api/ecosystem/card")[1])["name"], "Renamed")
+            open(f, "w").write("not json"); self.assertEqual(self.get("/api/ecosystem/card")[0], 404)      # a broken file never breaks the app
+            open(f, "w").write(json.dumps({"id": "x"})); self.assertEqual(self.get("/api/ecosystem/card")[0], 404)
+        finally:
+            open(f, "wb").write(keep)
+
     def test_downloads_require_login_when_pin_set(self):
         self.api.set_pin("1234", "tester"); self.api.lock_session()
         self.assertEqual(self.get("/reports/x.pdf")[0], 401); self.assertEqual(self.get("/backups/x.db")[0], 401)

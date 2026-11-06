@@ -8,7 +8,7 @@ _os.environ.setdefault("PYWEBVIEW_GUI", "edgechromium")
 _os.environ.setdefault("WEBKIT_DISABLE_COMPOSITING_MODE", "1")
 _os.environ.setdefault("PYWEBVIEW_NO_UIAUTOMATION", "1")
 
-import json, os, sys, datetime, shutil, threading, re, hashlib, secrets, hmac, time, zipfile
+import json, os, sys, datetime, shutil, threading, re, hashlib, secrets, hmac, time
 import http.server, socketserver, webbrowser, urllib.parse
 
 # ── Portable EXE / Electron path resolution ───────────────────────────────────
@@ -48,8 +48,7 @@ for _f in ("auth.json", "logo.png"):
     _seed_file(_f)
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from storage import (Storage, StorageError, INV_COLS, INK_CODES, INK_NAMES, INK_DEFAULTS,
-                     SHEET_INV, SHEET_HISTORY, SHEET_REPLACE, SHEET_INK, SHEET_LOG)
+from storage import Storage
 
 import licence_gate
 from licensing.licensing import LicenceError
@@ -568,156 +567,6 @@ class Api:
         except Exception as e:
             return json.dumps({"ok": False, "error": str(e)})
 
-    # ── PORTABLE APP BUILDER ──────────────────
-    def build_installer(self):
-        """Generate robust self-contained installer scripts for portable deployment."""
-        try:
-            setup_bat = os.path.join(BASE_DIR, "INSTALL_ON_NEW_PC.bat")
-            setup_sh  = os.path.join(BASE_DIR, "INSTALL_ON_NEW_PC.sh")
-            start_bat = os.path.join(BASE_DIR, "start.bat")
-
-            bat_content = (
-                "@echo off\r\n"
-                "title DericBI Inventory Control Setup\r\n"
-                "color 0A\r\n"
-                "echo.\r\n"
-                "echo  =====================================================\r\n"
-                "echo   DericBI Inventory Control\r\n"
-                "echo   Portable Installer  ^|  Cut Through Noise\r\n"
-                "echo  =====================================================\r\n"
-                "echo.\r\n"
-                "\r\n"
-                ":: ── Step 1: Find Python ──\r\n"
-                "set PYTHON_CMD=\r\n"
-                "for %%C in (python py python3) do (\r\n"
-                "  if defined PYTHON_CMD goto :found\r\n"
-                "  %%C --version >nul 2>&1 && set PYTHON_CMD=%%C\r\n"
-                ")\r\n"
-                ":found\r\n"
-                "if not defined PYTHON_CMD (\r\n"
-                "  echo  [!] Python not found.\r\n"
-                "  echo  [>] Opening Python download page...\r\n"
-                "  start https://www.python.org/downloads/\r\n"
-                "  echo  [!] Install Python 3.10 or higher, then run this script again.\r\n"
-                "  echo  [!] TIP: Tick 'Add Python to PATH' during installation!\r\n"
-                "  pause\r\n"
-                "  exit /b 1\r\n"
-                ")\r\n"
-                "echo  [+] Python found: %PYTHON_CMD%\r\n"
-                "\r\n"
-                ":: ── Step 2: Upgrade pip silently ──\r\n"
-                "echo  [~] Updating pip...\r\n"
-                "%PYTHON_CMD% -m pip install --upgrade pip --quiet --no-warn-script-location 2>nul\r\n"
-                "\r\n"
-                ":: ── Step 3: Install required packages ──\r\n"
-                "echo  [~] Installing required packages...\r\n"
-                "%PYTHON_CMD% -m pip install openpyxl reportlab --quiet --no-warn-script-location\r\n"
-                "if errorlevel 1 (\r\n"
-                "  echo  [!] Package installation failed. Check your internet connection.\r\n"
-                "  pause\r\n"
-                "  exit /b 1\r\n"
-                ")\r\n"
-                "echo  [+] Packages installed successfully.\r\n"
-                "\r\n"
-                ":: ── Step 4: Launch app ──\r\n"
-                "echo  [>] Launching DericBI Inventory Control...\r\n"
-                "echo.\r\n"
-                "%PYTHON_CMD% main.py\r\n"
-                "pause\r\n"
-            )
-
-            start_bat_content = (
-                "@echo off\r\n"
-                "title DericBI Inventory Control\r\n"
-                "cd /d \"%~dp0\"\r\n"
-                "for %%C in (python py python3) do (\r\n"
-                "  %%C --version >nul 2>&1 && set PYTHON_CMD=%%C && goto :run\r\n"
-                ")\r\n"
-                "echo Python not found. Please run INSTALL_ON_NEW_PC.bat first.\r\n"
-                "pause\r\n"
-                "exit /b 1\r\n"
-                ":run\r\n"
-                "start \"\" /B %PYTHON_CMD% main.py\r\n"
-                "exit\r\n"
-            )
-
-            sh_content = (
-                "#!/usr/bin/env bash\n"
-                "set -e\n"
-                "echo\n"
-                "echo ' ====================================================='\n"
-                "echo '  DericBI Inventory Control'\n"
-                "echo '  Portable Installer  |  Cut Through Noise'\n"
-                "echo ' ====================================================='\n"
-                "echo\n"
-                "# Find Python\n"
-                "PYTHON_CMD=''\n"
-                "for cmd in python3 python python3.12 python3.11 python3.10; do\n"
-                "  if command -v $cmd &>/dev/null; then PYTHON_CMD=$cmd; break; fi\n"
-                "done\n"
-                "if [ -z \"$PYTHON_CMD\" ]; then\n"
-                "  echo '[!] Python 3 not found. Install Python 3.10+ and retry.'\n"
-                "  exit 1\n"
-                "fi\n"
-                "echo \"[+] Python found: $PYTHON_CMD\"\n"
-                "echo '[~] Installing packages...'\n"
-                "$PYTHON_CMD -m pip install openpyxl reportlab --quiet\n"
-                "echo '[+] Packages ready.'\n"
-                "echo '[>] Launching...'\n"
-                "$PYTHON_CMD main.py\n"
-            )
-
-            readme_content = (
-                "DERICBI INVENTORY CONTROL\n"
-                "HOW TO INSTALL ON A NEW DEVICE\n"
-                "===============================================\n\n"
-                "WINDOWS:\n"
-                "  1. Copy this entire folder to the new PC (USB stick is fine)\n"
-                "  2. Double-click  INSTALL_ON_NEW_PC.bat\n"
-                "     • It will auto-install Python packages and launch the app\n"
-                "  3. Next time, just double-click  start.bat\n\n"
-                "MAC / LINUX:\n"
-                "  1. Copy this folder to the new device\n"
-                "  2. Open Terminal and cd into this folder\n"
-                "  3. Run:  bash INSTALL_ON_NEW_PC.sh\n"
-                "  4. Next time:  python3 main.py\n\n"
-                "REQUIREMENTS:\n"
-                "  • Python 3.10 or higher  (https://www.python.org/downloads/)\n"
-                "  • Internet connection for first-time package install\n"
-                "  • Packages: openpyxl, reportlab (installed automatically)\n\n"
-                "WHAT TO COPY TO NEW PC:\n"
-                "  main.py, storage.py — the application\n"
-                "  ui.html          — the interface\n"
-                "  (move your DATA with Security > Export Full Backup, then Restore on the new PC)\n"
-                "  auth.json        — your access PIN (hashed)\n"
-                "  config.json      — your custom departments/types (if exists)\n"
-                "  logo.png         — your logo (if you have one)\n"
-                "  start.bat        — quick-start launcher for Windows\n\n"
-                "LOGO:\n"
-                "  Place a file named logo.png in this folder.\n"
-                "  It will appear on every PDF report page header.\n\n"
-                "SECURITY:\n"
-                "  • auth.json holds your PIN hash — do not share if access-restricted\n"
-                "  • To reset PIN: delete auth.json and restart the app\n\n"
-                "SUPPORT:\n"
-                "  DericBI — Cut Through Noise\n"
-                "  https://dericbiskills.vercel.app\n"
-            )
-
-            with open(setup_bat, 'w', newline='', encoding='utf-8') as f: f.write(bat_content)
-            with open(start_bat, 'w', newline='', encoding='utf-8') as f: f.write(start_bat_content)
-            with open(setup_sh,  'w', newline='\n', encoding='utf-8') as f: f.write(sh_content)
-            with open(os.path.join(BASE_DIR, 'PORTABLE_README.txt'), 'w', encoding='utf-8') as f: f.write(readme_content)
-
-            try:
-                import stat as _stat
-                os.chmod(setup_sh, os.stat(setup_sh).st_mode | _stat.S_IEXEC | _stat.S_IXGRP | _stat.S_IXOTH)
-            except: pass
-
-            self.engine.log_session('INSTALLER', 'Portable installer scripts generated')
-            return json.dumps({"ok": True, "msg": f"Installer files created in:\n{BASE_DIR}\n\nFiles: INSTALL_ON_NEW_PC.bat / .sh  +  start.bat  +  PORTABLE_README.txt"})
-        except Exception as e:
-            return json.dumps({"ok": False, "error": str(e)})
 
 # ════════════════════════════════════════════
 # LAUNCH
@@ -758,6 +607,20 @@ BROWSER_BRIDGE = """
 })();
 </script>
 """
+
+def ecosystem_card():
+    """The app's public "capability card" (who it is and what it offers), read as written from src/ecosystem.json so it can be edited without touching
+    code. Returns the JSON bytes, or None when the file is missing or not a card, in which case the address simply answers 404. No data is in it."""
+    try:
+        with open(os.path.join(BUNDLE_DIR, "ecosystem.json"), "rb") as f:
+            raw = f.read(64 * 1024)
+        card = json.loads(raw)
+        if isinstance(card, dict) and all(isinstance(card.get(k), str) and card[k] for k in ("contract", "id", "name")):
+            return json.dumps(card).encode("utf-8")
+    except (OSError, ValueError):
+        pass
+    return None
+
 
 def make_handler(api, ui_path, browser_mode=False):
     class AppHandler(http.server.BaseHTTPRequestHandler):
@@ -803,6 +666,12 @@ def make_handler(api, ui_path, browser_mode=False):
             if not self._origin_ok():
                 self._send(403, "Forbidden"); return
             path = urllib.parse.urlparse(self.path).path
+            # The public capability card for other DericBI systems (see docs/ECOSYSTEM.md): no data, so no login or licence needed.
+            if path == "/api/ecosystem/card":
+                card = ecosystem_card()
+                if card is None:
+                    self._send(404, "Not found"); return
+                self._send(200, card, "application/json; charset=utf-8"); return
             if (path.startswith("/reports/") or path.startswith("/backups/")) and not licence_gate.current_state()["ok"]:
                 self._send(402, "Licence required"); return
             if (path.startswith("/reports/") or path.startswith("/backups/")) and api.needs_login():
@@ -920,13 +789,19 @@ def make_handler(api, ui_path, browser_mode=False):
 
     return AppHandler
 
+HOME_PORT = 47615   # fixed local address, http://127.0.0.1:47615 (the ecosystem card is at /api/ecosystem/card)
+
 class LocalServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
 def run_browser(api, ui_path, electron_mode=False):
     # electron_mode: bridge injected by preload.js; serve raw html, no webbrowser.open
-    server = LocalServer(("127.0.0.1", 0), make_handler(api, ui_path, browser_mode=not electron_mode))
+    handler = make_handler(api, ui_path, browser_mode=not electron_mode)
+    try:
+        server = LocalServer(("127.0.0.1", HOME_PORT), handler)   # same address every time, so other systems can find it
+    except OSError:
+        server = LocalServer(("127.0.0.1", 0), handler)           # taken (second copy running): any free port
     port   = server.server_port
     url    = f"http://127.0.0.1:{port}/"
     # Expose port so get_logo_path() can build an HTTP URL for the logo
@@ -986,10 +861,10 @@ def generate_pdf_report(engine, output_path: str,
         from reportlab.lib import colors
         from reportlab.lib.units import cm
         from reportlab.lib.styles import ParagraphStyle
-        from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT, TA_JUSTIFY
+        from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_JUSTIFY
         from reportlab.platypus import (
             Paragraph, Spacer, Table, TableStyle,
-            HRFlowable, KeepTogether, PageBreak, Flowable
+            HRFlowable
         )
         from reportlab.platypus import BaseDocTemplate, Frame, PageTemplate
         from reportlab.lib.colors import HexColor
@@ -998,8 +873,6 @@ def generate_pdf_report(engine, output_path: str,
         # ── PALETTE ────────────────────────────────────────
         C_BRAND  = HexColor('#0A1532')
         C_GOLD   = HexColor('#FDC819')
-        C_GREEN  = HexColor('#1a7a3f')
-        C_AMBER  = HexColor('#b45309')
         C_GREY   = HexColor('#475569')
         C_GREY_LT= HexColor('#f9f6f4')
         C_GREY_MD= HexColor('#e8e0dc')
@@ -1081,8 +954,6 @@ def generate_pdf_report(engine, output_path: str,
                    spaceAfter=2, spaceBefore=5, leading=12)
         s_exec = S('Exec', fontSize=8.5, fontName='Helvetica', textColor=C_BLACK,
                    leading=13, alignment=TA_JUSTIFY, spaceAfter=3)
-        s_foot = S('Foot', fontSize=7, fontName='Helvetica', textColor=C_GREY,
-                   alignment=TA_CENTER)
 
         # ── PAGE TEMPLATE ──────────────────────────────────
         def make_doc(path):

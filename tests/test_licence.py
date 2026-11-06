@@ -49,6 +49,11 @@ class LockedCopy(Http):
             self.assertEqual(body["licence"], {"ok": False, "kind": "unlicensed"}, m)
             self.assertFalse(body["ok"]); self.assertIn("licensed", body["error"])
 
+    def test_the_ecosystem_card_still_answers_when_locked(self):
+        self.locked()                                           # it holds no data, and other systems need to find the app before it is licensed
+        st, body = self.get("/api/ecosystem/card")
+        self.assertEqual(st, 200); self.assertEqual(json.loads(body)["id"], "inventory-control")
+
     def test_creating_an_account_is_gated_too(self):
         self.locked(); self.assertFalse(os.path.exists(app.AUTH_FILE))
         self.assertEqual(self.call("set_pin", ["1234", "tester"])[0], 402)
