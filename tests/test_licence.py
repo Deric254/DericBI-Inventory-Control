@@ -119,14 +119,61 @@ class Activation(Http):
         r = self.activate(lic.issue(seed, code, "Someone Else", 30)["licence"]); self.assertFalse(r["ok"])
         self.assertTrue(self.activate(lic.issue(seed, code, "lucy", 60)["licence"])["ok"])
 
-    def test_licence_stops_working_after_it_expires(self):
+    def test_expired_licence_becomes_view_only_not_locked(self):
         today = {"d": date(2026, 1, 1)}
         lic, key_text, seed = make_licensing(); lic._today = lambda: today["d"]; licence_gate.use_licensing(lic)
         self.assertTrue(self.activate(lic.issue(seed, lic.install_id(), "Lucy", 1)["licence"])["ok"])
         self.assertEqual(self.call("is_pin_set")[0], 200)
-        today["d"] += timedelta(days=3); licence_gate.reset_cache()
-        st, body = self.call("is_pin_set"); self.assertEqual(st, 402); self.assertIn("expired", body["error"])
-        today["d"] -= timedelta(days=3); licence_gate.reset_cache()      # clock back inside the term: still fine
+        today["d"] += timedelta(days=3); licence_gate.reset_cache()      # 2 days after the end: inside the 5-day grace
+        st, body = self.call("licence_state"); self.assertTrue(body["licence"]["ok"] and body["licence"]["grace"])
+        self.assertEqual(body["licence"]["grace_days_left"], 3)
+        self.assertEqual(self.call("remove_sample_data")[0], 200)        # full use during grace
+        today["d"] += timedelta(days=10); licence_gate.reset_cache()     # well past grace
+        st, body = self.call("licence_state"); s = body["licence"]
+        self.assertFalse(s["ok"]); self.assertEqual((s["kind"], s["read_only"]), ("expired", True))
+        self.assertIn("code=" + lic.install_id(), s["renew_url"]); self.assertIn("app=inventory-control", s["renew_url"])
+        st, body = self.call("remove_sample_data")                        # writing is refused and says where to renew
+        self.assertEqual(st, 402); self.assertTrue(body["licence"]["read_only"]); self.assertIn("Renew", body["error"])
+        self.assertIn("renew.html", body["licence"]["renew_url"])
+        for m in ("add_asset", "update_asset", "delete_asset", "transfer_asset", "restore_full_backup", "ink_action", "write_history"):
+            self.assertEqual(self.call(m)[0], 402, m)
+        for m in ("is_pin_set", "load_data", "get_config", "get_backups"):    # reading and signing in keep working
+            self.assertNotEqual(self.call(m)[0], 402, m)
+        today["d"] -= timedelta(days=13); licence_gate.reset_cache()      # clock back inside the term: still fine
+
+    def test_expired_copy_can_still_take_its_data_out(self):
+        today = {"d": date(2026, 1, 1)}
+        lic, key_text, seed = make_licensing(); lic._today = lambda: today["d"]; licence_gate.use_licensing(lic)
+        self.activate(lic.issue(seed, lic.install_id(), "Lucy", 1)["licence"])
+        today["d"] += timedelta(days=30); licence_gate.reset_cache()
+        self.assertTrue(J(self.api.export_full_backup())["ok"])
+        self.assertEqual(self.get("/backups/none.zip")[0], 404)           # reaches the file lookup, not the licence refusal
+        self.assertNotEqual(self.get("/reports/none.pdf")[0], 402)
+
+    def test_renewing_an_expired_copy_restores_full_use(self):
+        today = {"d": date(2026, 1, 1)}
+        lic, key_text, seed = make_licensing(); lic._today = lambda: today["d"]; licence_gate.use_licensing(lic)
+        code = lic.install_id(); self.activate(lic.issue(seed, code, "Lucy", 30)["licence"])
+        today["d"] += timedelta(days=60); licence_gate.reset_cache()
+        self.assertEqual(self.call("remove_sample_data")[0], 402)
+        self.assertTrue(self.activate(lic.issue(seed, code, "Lucy", 30)["licence"])["ok"])
+        self.assertEqual(self.call("remove_sample_data")[0], 200)
+
+    def test_never_licensed_or_wrong_computer_is_still_fully_locked(self):
+        lic, seed, _ = self.locked()
+        self.assertEqual(self.call("load_data")[0], 402)
+        self.assertNotIn("read_only", self.call("load_data")[1]["licence"])
+        other, _, oseed = make_licensing(); other_lic = other.issue(oseed, "AAAA-BBBB-CCCC", "X", 30)["licence"]
+        self.assertFalse(self.call("activate_licence", [other_lic])[1]["ok"])
+
+    def test_lifetime_licence_never_nags_or_expires(self):
+        today = {"d": date(2026, 1, 1)}
+        lic, key_text, seed = make_licensing(); lic._today = lambda: today["d"]; licence_gate.use_licensing(lic)
+        r = self.activate(lic.issue(seed, lic.install_id(), "Lucy", lifetime=True)["licence"]); self.assertTrue(r["ok"])
+        self.assertTrue(r["licence"]["lifetime"])
+        today["d"] += timedelta(days=365 * 20); licence_gate.reset_cache()
+        self.assertEqual(self.call("remove_sample_data")[0], 200)
+        with self.assertRaises(ValueError): lic.issue(seed, lic.install_id(), "Lucy", None)
 
     def test_renewal_notice_data_counts_days_left(self):
         lic, seed, _ = self.locked(); code = lic.install_id()
@@ -246,3 +293,27 @@ class ShippedConfigurationIsConsistent(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PayWindow(unittest.TestCase):
+    """The one PayPal window: right account, right amounts, one of it, and only safe links ever leave the app."""
+    @classmethod
+    def setUpClass(cls):
+        with open(UI, encoding="utf-8") as f: cls.ui = f.read()
+        with open(os.path.join(ROOT, "electron-main.js"), encoding="utf-8") as f: cls.main_js = f.read()
+
+    def test_one_pay_window_with_the_right_account_and_plans(self):
+        self.assertEqual(self.ui.count('id="pay-modal"'), 1)
+        self.assertEqual(self.ui.count("function openPay("), 1)
+        self.assertIn("email:'dericmarangu@gmail.com'", self.ui)
+        self.assertIn("M:{name:'Monthly (30 days)',amount:100}", self.ui); self.assertIn("L:{name:'Lifetime',amount:1000}", self.ui)
+        self.assertIn("tag:'INV'", self.ui)
+
+    def test_proof_email_carries_what_is_needed_to_issue_the_licence(self):
+        for needed in ("Activation code: ", "Reference: ", "PayPal transaction ID: ", "Amount: $"): self.assertIn(needed, self.ui)
+
+    def test_only_payment_links_can_be_opened_from_the_app(self):
+        m = re.search(r"const LINK_ALLOW = \[(.*?)\];", self.main_js, re.S); self.assertTrue(m)
+        allowed = re.findall(r"'([^']+)'", m.group(1))
+        self.assertEqual(sorted(allowed), sorted(["https://dericbi.vercel.app/renew.html?", "https://www.paypal.com/",
+                                                  "https://mail.google.com/mail/?view=cm", "mailto:dericmarangu@gmail.com?"]))

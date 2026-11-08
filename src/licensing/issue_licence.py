@@ -28,10 +28,13 @@ def main():
     ap.add_argument("--key-file", help="the private owner key file (default <prefix>-owner.key, else a hidden prompt)")
     ap.add_argument("--code", required=True, help="the activation code shown on the customer's computer")
     ap.add_argument("--user", required=True, help="the customer's name")
-    ap.add_argument("--days", type=int, required=True)
+    ap.add_argument("--days", type=int, help="how long the licence lasts (30 for the monthly plan)")
+    ap.add_argument("--lifetime", action="store_true", help="a lifetime licence instead of --days")
     ap.add_argument("--features", default="", help="optional comma-separated feature flags")
     ap.add_argument("--log", help="append a line (date, name, code, expiry) to this file; keep it outside the project repo")
     a = ap.parse_args()
+    if not a.lifetime and not a.days:
+        ap.error("give --days N, or --lifetime")
     if not (a.prefix and a.app):
         ap.error("--prefix and --app are required (or keep licensing.json next to this script)")
 
@@ -47,7 +50,7 @@ def main():
         key_text = getpass.getpass(f"Owner key ({key_file} not found; paste it, input is hidden): ")
     try:
         seed = lic.parse_owner_key(key_text)
-        out = lic.issue(seed, a.code, a.user, a.days, [f for f in a.features.split(",") if f.strip()])
+        out = lic.issue(seed, a.code, a.user, a.days, [f for f in a.features.split(",") if f.strip()], lifetime=a.lifetime)
     except (licensing.LicenceError, ValueError) as e:
         sys.exit(f"Not issued: {e}")
     if a.log:

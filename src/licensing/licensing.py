@@ -24,6 +24,7 @@ try:                       # works as a package module or dropped next to ed2551
 except ImportError:        # pragma: no cover
     import ed25519
 
+LIFETIME_END = "2099-12-31"   # a lifetime licence is an ordinary licence that expires far beyond any computer's life
 _CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"   # no 0/O/1/I so codes can be read out over the phone
 
 
@@ -120,7 +121,7 @@ class Licensing:
     def owner_key_matches(self, seed: bytes) -> bool:
         return bool(self.public) and hmac.compare_digest(ed25519.public_key(seed), self.public)
 
-    def issue(self, seed: bytes, code: str, user: str, days: int, features=None) -> dict:
+    def issue(self, seed: bytes, code: str, user: str, days: int = None, features=None, lifetime: bool = False) -> dict:
         if not self.owner_key_matches(seed):
             raise LicenceError("That owner key doesn't belong to this app. Use the key made for this app's installer.")
         norm = norm_code(code)
@@ -129,12 +130,17 @@ class Licensing:
         user = re.sub(r"\s+", " ", (user or "").strip())
         if not 1 <= len(user) <= 60:
             raise ValueError("Give the licence holder's name (1 to 60 characters).")
-        if not 1 <= int(days) <= self.max_days:
-            raise ValueError(f"A licence lasts 1 to {self.max_days} days.")
         today = self._today()
-        expires = (today + timedelta(days=int(days))).isoformat()
+        if lifetime:
+            expires = LIFETIME_END
+        else:
+            if days is None or not 1 <= int(days) <= self.max_days:
+                raise ValueError(f"A licence lasts 1 to {self.max_days} days.")
+            expires = (today + timedelta(days=int(days))).isoformat()
         body = {"v": self.version, "app": self.app_id, "for": norm, "user": user, "role": "member",
                 "issued": today.isoformat(), "expires": expires}
+        if lifetime:
+            body["plan"] = "lifetime"
         if features:
             body["features"] = sorted({str(f) for f in features})
         payload = json.dumps(body, separators=(",", ":"), sort_keys=True).encode()
@@ -151,8 +157,8 @@ class Licensing:
             self.store.set("install_id", code)
         return code
 
-    def read(self, token: str, for_install: str = None) -> dict:
-        """Check signature, app, computer and expiry. Returns the licence data or raises LicenceError."""
+    def _verify(self, token: str, for_install: str = None) -> dict:
+        """Check signature, app, computer and that the expiry date is a date. Expiry itself is judged by the caller."""
         if not self.configured():
             raise LicenceError("This copy of the app can't check licences yet (the owner key isn't set in the build).")
         try:
@@ -175,8 +181,15 @@ class Licensing:
             expires = date.fromisoformat(data["expires"])
         except (KeyError, ValueError, TypeError):
             raise LicenceError("That licence has no valid expiry date.")
-        if expires + timedelta(days=self.grace_days) < self._today():
+        data["_expires"] = expires
+        return data
+
+    def read(self, token: str, for_install: str = None) -> dict:
+        """Check signature, app, computer and expiry (grace included). Returns the licence data or raises LicenceError."""
+        data = self._verify(token, for_install)
+        if data["_expires"] + timedelta(days=self.grace_days) < self._today():
             raise LicenceError("This licence has expired. Ask the owner for a new one.")
+        del data["_expires"]
         return data
 
     def activate(self, token: str, expect_user: str = None) -> dict:
@@ -226,12 +239,19 @@ class Licensing:
         if not token:
             return {"ok": False, "kind": "unlicensed", "message": "This computer isn't licensed yet.", "install_id": self.install_id()}
         try:
-            data = self.read(token)
+            data = self._verify(token)
         except LicenceError as e:
             return {"ok": False, "kind": "unlicensed", "message": str(e), "install_id": self.install_id()}
         if not self.clock_ok():
             return {"ok": False, "kind": "unlicensed", "message": "This computer's clock was set back. Fix the date and time to continue.",
                     "install_id": self.install_id()}
-        left = (date.fromisoformat(data["expires"]) - self._today()).days
-        return {"ok": True, "kind": "licensed", "message": "", "expires": data["expires"], "days_left": left,
-                "user": data.get("user"), "features": data.get("features", [])}
+        left = (data.pop("_expires") - self._today()).days
+        info = {"expires": data["expires"], "days_left": left, "user": data.get("user"), "features": data.get("features", []),
+                "lifetime": data.get("plan") == "lifetime", "install_id": self.install_id()}
+        if left >= 0:
+            return {"ok": True, "kind": "licensed", "message": "", **info}
+        if left >= -self.grace_days:     # just lapsed: everything keeps working while the owner is asked to renew
+            return {"ok": True, "kind": "licensed", "message": "", "grace": True, "grace_days_left": self.grace_days + left, **info}
+        # Past the grace period: the data stays readable, premium work stops (the host decides what "read" means).
+        return {"ok": False, "kind": "expired", "read_only": True,
+                "message": "Your licence has expired. You can still sign in and view your data. Renew to add or change anything.", **info}

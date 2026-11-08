@@ -672,7 +672,7 @@ def make_handler(api, ui_path, browser_mode=False):
                 if card is None:
                     self._send(404, "Not found"); return
                 self._send(200, card, "application/json; charset=utf-8"); return
-            if (path.startswith("/reports/") or path.startswith("/backups/")) and not licence_gate.current_state()["ok"]:
+            if (path.startswith("/reports/") or path.startswith("/backups/")) and not licence_gate.allows(None, licence_gate.current_state()):
                 self._send(402, "Licence required"); return
             if (path.startswith("/reports/") or path.startswith("/backups/")) and api.needs_login():
                 self._send(401, "Locked"); return
@@ -767,8 +767,8 @@ def make_handler(api, ui_path, browser_mode=False):
                 return
             if name not in licence_gate.LICENCE_METHODS:
                 lic_state = licence_gate.current_state()
-                if not lic_state["ok"]:
-                    self._send(402, json.dumps(licence_gate.refusal(lic_state))); return
+                if not licence_gate.allows(name, lic_state):
+                    self._send(402, json.dumps(licence_gate.refusal(lic_state, name))); return
             if name not in api.PUBLIC_METHODS and api.needs_login():
                 self._send(401, json.dumps({"ok": False, "locked": True, "error": "Session locked — please log in again"}))
                 return

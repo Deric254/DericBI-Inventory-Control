@@ -24,7 +24,8 @@ class MemoryStore:
 def make_licensing(today=None):
     """A Licensing over a THROWAWAY key (never the real one): (instance, owner key text, owner key seed)."""
     key_text, public = Licensing.make_owner_key(licence_gate.PREFIX)
-    kw = {} if today is None else {"today": lambda: today}
+    kw = {"grace_days": licence_gate.GRACE_DAYS}                # the same grace period as the shipped app
+    if today is not None: kw["today"] = lambda: today
     lic = Licensing(licence_gate.APP_ID, licence_gate.PREFIX, public, MemoryStore(), **kw)
     return lic, key_text, lic.parse_owner_key(key_text)
 

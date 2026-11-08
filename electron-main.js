@@ -167,6 +167,15 @@ ipcMain.handle('open-file', (_e, filePath) => {
   return shell.openPath(target).then(() => ({ ok: true })).catch(e => ({ ok: false, error: e.message }));
 });
 
+// Opens a payment link in the person's own browser or email app. Only the places the pay window needs are ever opened:
+// the DericBI renewal page, PayPal, Gmail's compose window and an email to the owner.
+const LINK_ALLOW = ['https://dericbi.vercel.app/renew.html?', 'https://www.paypal.com/', 'https://mail.google.com/mail/?view=cm',
+                    'mailto:dericmarangu@gmail.com?'];
+ipcMain.handle('open-link', (_e, url) => {
+  if (typeof url !== 'string' || url.length > 4000 || !LINK_ALLOW.some(p => url.startsWith(p))) return { ok: false };
+  return shell.openExternal(url).then(() => ({ ok: true })).catch(e => ({ ok: false, error: e.message }));
+});
+
 ipcMain.on('refocus-window', () => {
   if (!mainWindow) return;
   // Blur then focus replicates exactly what minimize/restore does at OS level

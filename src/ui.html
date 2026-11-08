@@ -749,6 +749,12 @@ tbody tr:hover{background:var(--bg3)}
       <div id="lic-msg" style="font-size:12px;color:var(--text3);line-height:1.5"></div>
     </div>
     <div id="lic-body">
+      <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.5rem">Buy or renew</div>
+      <div style="display:flex;gap:.5rem;margin-bottom:.4rem">
+        <button onclick="openPay('M')" style="flex:1;padding:.65rem .5rem;background:#0070ba;color:#fff;border:none;border-radius:9px;font-size:12.5px;font-weight:700;cursor:pointer">$100 / month<br><span style="font-weight:400;font-size:11px">Pay with PayPal</span></button>
+        <button onclick="openPay('L')" style="flex:1;padding:.65rem .5rem;background:var(--gold,#facc15);color:#000;border:none;border-radius:9px;font-size:12.5px;font-weight:700;cursor:pointer">$1000 for life<br><span style="font-weight:400;font-size:11px">Pay with PayPal</span></button>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:1rem">Pay, email us the proof, and we send your licence back. Paste it below.</div>
       <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.5rem">Activation code</div>
       <div style="display:flex;gap:.5rem;margin-bottom:.4rem">
         <div id="lic-code" style="flex:1;padding:.7rem .95rem;background:var(--bg3);border:1px solid var(--border2);border-radius:9px;color:var(--text);font-size:16px;font-family:'DM Mono',monospace;letter-spacing:.15em;text-align:center;user-select:all">—</div>
@@ -775,7 +781,14 @@ tbody tr:hover{background:var(--bg3)}
 <!-- Small corner notice: only appears when 14 days or fewer remain, never moves the layout -->
 <div id="licence-notice" style="display:none;position:fixed;bottom:12px;right:12px;z-index:9000;align-items:center;gap:.75rem;background:var(--bg2);border:1px solid var(--gold);border-radius:10px;padding:.5rem .75rem;font-size:12px;color:var(--text);box-shadow:0 8px 24px rgba(0,0,0,.35)">
   <span id="licence-notice-text"></span>
-  <button onclick="openRenew()" style="padding:.25rem .6rem;background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:6px;font-size:11.5px;cursor:pointer">Renew</button>
+  <button id="licence-notice-btn" onclick="openRenew()" style="padding:.25rem .6rem;background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:6px;font-size:11.5px;cursor:pointer">Renew</button>
+</div>
+<!-- Pay with PayPal: PayPal to the owner, then one click opens an email for the proof -->
+<div id="pay-modal" style="display:none;position:fixed;inset:0;z-index:100001;background:rgba(0,0,0,.6);align-items:center;justify-content:center;padding:16px;overflow:auto" onclick="if(event.target===this)closePay()">
+  <div role="dialog" aria-modal="true" aria-labelledby="pay-title" style="position:relative;background:var(--bg2);border:1px solid var(--border2);border-radius:16px;padding:1.5rem;width:440px;max-width:100%;color:var(--text);box-shadow:0 32px 80px rgba(0,0,0,.6)">
+    <button onclick="closePay()" aria-label="Close" style="position:absolute;top:8px;right:12px;background:none;border:none;color:var(--text3);font-size:24px;cursor:pointer">&times;</button>
+    <div id="pay-body"></div>
+  </div>
 </div>
 
 <div id="login-overlay" style="position:fixed;inset:0;background:var(--bg);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;">
@@ -3529,6 +3542,7 @@ function licenceWatch(txt){
   if(typeof txt!=='string'||txt.length>800||txt.indexOf('"licence"')<0) return;
   var r; try{ r=JSON.parse(txt); }catch(e){ return; }
   if(!r||r.ok!==false||!r.licence||r.licence.ok!==false||licenceChecking) return;
+  if(r.licence.read_only){ readOnlyRefused(r); return; }      // expired: tell them to renew, never lock them out
   licenceChecking=true;
   pywebview.api.licence_state().then(function(x){
     licenceChecking=false;
@@ -3539,7 +3553,7 @@ function licenceWatch(txt){
 function showLicence(state,msg,renew){
   var configured=state.kind!=='unconfigured';
   licEl('lic-title').textContent=renew?'Renew licence':'Licence required';
-  licEl('lic-msg').textContent=renew?('Your licence expires '+(state.expires||'soon')+'. Paste the new licence the owner sends you.'):(msg||state.message||'');
+  licEl('lic-msg').textContent=renew?((state.kind==='expired'?'Your licence expired on ':'Your licence expires ')+(state.expires||'soon')+'. Pay with PayPal below, then paste the new licence here.'):(msg||state.message||'');
   licEl('lic-body').style.display=configured?'':'none';
   licEl('lic-code').textContent=state.install_id||'—';
   licEl('lic-owner-wrap').style.display=renew?'none':'';
@@ -3555,6 +3569,7 @@ function hideLicence(){
   licEl('lic-owner-key').value=''; licEl('lic-input').value='';
 }
 function closeLicence(){ hideLicence(); }
+document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&licEl('pay-modal')&&licEl('pay-modal').style.display==='flex') closePay(); });
 function licError(text){ var e=licEl('lic-err'); e.textContent=text; e.style.display=''; }
 function copyActivationCode(){
   var code=licEl('lic-code').textContent; if(!code||code==='—') return;
@@ -3564,6 +3579,61 @@ function copyActivationCode(){
 function toggleOwnerKey(){
   var f=licEl('lic-owner-form'); f.style.display=f.style.display==='none'?'':'none';
   if(f.style.display!=='none') setTimeout(function(){licEl('lic-owner-key').focus();},50);
+}
+// Past the grace period the app is view-only: sign-in and reading work, and every blocked action lands here.
+var readOnlyToastAt=0;
+function readOnlyRefused(r){
+  var s=(r&&r.licence)||{};
+  licenceState=Object.assign({},licenceState||{},{kind:'expired',read_only:true,renew_url:s.renew_url||(licenceState&&licenceState.renew_url)});
+  refreshLicenceNotice(licenceState);
+  if(Date.now()-readOnlyToastAt>4000){ readOnlyToastAt=Date.now(); toast(r.error||'Your licence has expired, so this is view-only. Renew to add or change anything.','warn'); }
+}
+function openLink(url){
+  if(window.electronAPI&&window.electronAPI.openLink) window.electronAPI.openLink(url); else window.open(url,'_blank','noopener');
+}
+function goRenew(){ openRenew(); }       // the Renew button opens the licence screen, where the pay buttons are
+
+/* ── Pay with PayPal (one window for every payment in this app) ─────────── */
+var PAY={email:'dericmarangu@gmail.com',paypal:'https://www.paypal.com/myaccount/transfer/homepage',app:'DericBI Inventory Control',tag:'INV',
+         plans:{M:{name:'Monthly (30 days)',amount:100},L:{name:'Lifetime',amount:1000}}};
+function payEsc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function payCode(){ var c=(licEl('lic-code')&&licEl('lic-code').textContent)||(licenceState&&licenceState.install_id)||''; return c==='—'?'':c; }
+function payRef(plan){ return 'LIC-'+PAY.tag+'-'+payCode().replace(/[^A-Z0-9]/gi,'').toUpperCase()+'-'+plan; }   // same app + computer + plan = same reference, so a repeat is easy to spot
+function paySentKey(ref){ return 'dericbi.paysent.'+ref; }
+function payMail(plan){
+  var p=PAY.plans[plan], ref=payRef(plan), subject='Payment proof - '+PAY.app+' licence '+p.name+' - '+ref;
+  var body=['Hello Deric,','','I have paid by PayPal. My proof is attached.','','What I paid for: '+PAY.app+' licence, '+p.name,'Amount: $'+p.amount+' USD','Reference: '+ref,
+            'Activation code: '+payCode(),'PayPal transaction ID: ','My name: ','','(Please attach your PayPal screenshot before sending.)'].join('\n');
+  return {mailto:'mailto:'+PAY.email+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body),
+          gmail:'https://mail.google.com/mail/?view=cm&fs=1&to='+encodeURIComponent(PAY.email)+'&su='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body)};
+}
+function openPay(plan, again){
+  if(!payCode()){ toast('The activation code is not ready yet. Close and open this screen again.','warn'); return; }
+  var p=PAY.plans[plan], ref=payRef(plan), m=payMail(plan), sent=null;
+  try{ sent=again?null:localStorage.getItem(paySentKey(ref)); }catch(e){}
+  var h='<h2 id="pay-title" style="margin:0;font-family:\'Syne\',sans-serif;font-size:18px">Pay with PayPal</h2><div style="color:var(--text3);font-size:12.5px;margin:2px 0 12px">'+payEsc(PAY.app)+' licence, '+payEsc(p.name)+'</div>';
+  if(sent){
+    h+='<div style="background:var(--bg3);border:1px solid var(--gold,#facc15);border-radius:10px;padding:.7rem .9rem;font-size:12.5px"><b>Proof already sent</b><br>You opened the proof email for this payment on '+payEsc(new Date(Number(sent)).toLocaleDateString())+'. We are checking it. Please do not pay again for the same thing.</div>'+
+       '<div style="display:flex;gap:.5rem;margin-top:.9rem"><button onclick="closePay()" style="flex:1;padding:.6rem;background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:9px;cursor:pointer">Close</button><button onclick="openPay(\''+plan+'\',true)" style="flex:1;padding:.6rem;background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:9px;cursor:pointer">I need to pay again</button></div>';
+  } else {
+    var row=function(label,val){return '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin:.6rem 0 .25rem">'+label+'</div><div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem;background:var(--bg3);border:1px solid var(--border2);border-radius:9px;padding:.5rem .7rem;word-break:break-all"><b style="font-size:13.5px">'+payEsc(val)+'</b><button onclick="payCopy(this,\''+payEsc(val)+'\')" style="flex:0 0 auto;padding:.25rem .6rem;background:var(--bg2);color:var(--text);border:1px solid var(--border2);border-radius:6px;font-size:11.5px;cursor:pointer">Copy</button></div>';};
+    h+='<div style="background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:.5rem .9rem;font-size:26px;font-weight:800;color:var(--green,#22c55e)">$'+p.amount+' USD</div>'+
+       row('Send to (PayPal)',PAY.email)+row('Put this in the PayPal note',ref)+
+       '<ol style="margin:.9rem 0;padding-left:1.2rem;font-size:12.5px;line-height:1.55;color:var(--text2,var(--text))"><li><b>Open PayPal</b> and send exactly <b>$'+p.amount+' USD</b> to the email above.</li><li><b>Take a screenshot</b> of the PayPal confirmation. It must show the amount, the date and the <b>transaction ID</b>.</li><li><b>Click "Email my proof"</b>. The email opens already written. Attach the screenshot and press Send.</li></ol>'+
+       '<div style="display:flex;gap:.5rem"><button onclick="openLink(PAY.paypal)" style="flex:1;padding:.7rem;background:#0070ba;color:#fff;border:none;border-radius:9px;font-weight:700;cursor:pointer">Open PayPal</button>'+
+       '<button onclick="payProof(\''+plan+'\')" style="flex:1;padding:.7rem;background:var(--gold,#facc15);color:#000;border:none;border-radius:9px;font-weight:700;cursor:pointer">Email my proof</button></div>'+
+       '<div style="font-size:11px;color:var(--text3);margin-top:.7rem">Email app not opening? <span onclick="payProof(\''+plan+'\',true)" style="text-decoration:underline;cursor:pointer">Write it in Gmail on the web</span>, or send the screenshot to <b>'+PAY.email+'</b> with the reference above.</div>';
+  }
+  licEl('pay-body').innerHTML=h; licEl('pay-modal').style.display='flex';
+}
+function closePay(){ licEl('pay-modal').style.display='none'; }
+function payCopy(btn,text){
+  var done=function(){ var o=btn.textContent; btn.textContent='Copied'; setTimeout(function(){btn.textContent=o;},1300); };
+  try{ navigator.clipboard.writeText(text).then(done,function(){}); }catch(e){}
+}
+function payProof(plan,gmail){
+  var m=payMail(plan); openLink(gmail?m.gmail:m.mailto);
+  try{ localStorage.setItem(paySentKey(payRef(plan)),String(Date.now())); }catch(e){}
 }
 function afterLicenceOk(state){
   licenceState=state; hideLicence();
@@ -3592,26 +3662,34 @@ function submitOwnerKey(){
 }
 function refreshLicenceNotice(state){
   var el=licEl('licence-notice'); if(!el) return;
-  var s=state||licenceState;
-  if(s&&s.kind==='licensed'&&typeof s.days_left==='number'&&s.days_left<=LICENCE_WARNING_DAYS){
+  var s=state||licenceState, txt='', renewNow=false;
+  if(s&&s.kind==='expired'&&s.read_only){
+    txt='Licence expired. View-only: you can read and export your data.'; renewNow=true;
+  } else if(s&&s.kind==='licensed'&&s.grace){
+    var g=s.grace_days_left;
+    txt='Licence expired. Renew within '+(g<=0?'today':g===1?'1 day':g+' days')+' to keep full access.'; renewNow=true;
+  } else if(s&&s.kind==='licensed'&&!s.lifetime&&typeof s.days_left==='number'&&s.days_left<=LICENCE_WARNING_DAYS){
     var d=s.days_left;
-    licEl('licence-notice-text').textContent='Licence expires '+(d<=0?'today':d===1?'tomorrow':'in '+d+' days')+'.';
-    el.style.display='flex';
-  } else el.style.display='none';
+    txt='Licence expires '+(d<=0?'today':d===1?'tomorrow':'in '+d+' days')+'.';
+  }
+  if(!txt){ el.style.display='none'; return; }
+  licEl('licence-notice-text').textContent=txt;
+  var b=licEl('licence-notice-btn'); b.textContent='Renew'; b.onclick=renewNow&&s.renew_url?goRenew:openRenew;
+  el.style.display='flex';
 }
 function refreshLicenceNoticeFromServer(){
   pywebview.api.licence_state().then(function(r){ var s=JSON.parse(r).licence; if(s){ licenceState=s; refreshLicenceNotice(s); } });
 }
 function hideLicenceNotice(){ var el=licEl('licence-notice'); if(el) el.style.display='none'; }
 function openRenew(){
-  pywebview.api.licence_state().then(function(r){ var s=JSON.parse(r).licence; if(s&&s.kind==='licensed') showLicence(s,'',true); });
+  pywebview.api.licence_state().then(function(r){ var s=JSON.parse(r).licence; if(s&&(s.kind==='licensed'||s.kind==='expired')) showLicence(s,'',true); });
 }
 function initLicence(){
   wrapLicenceWatch();
   pywebview.api.licence_state().then(function(r){
     var res=JSON.parse(r), s=res.licence;
     if(!s){ licenceBooting=false; initLogin(); return; }     // backend not answering: let the normal startup report it
-    if(s.ok){ licenceState=s; licenceBooting=false; initLogin(); }
+    if(s.ok||s.read_only){ licenceState=s; licenceBooting=false; initLogin(); refreshLicenceNotice(s); }   // expired = view-only, still signs in
     else showLicence(s,s.message,false);
   });
 }
